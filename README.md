@@ -340,12 +340,35 @@ images missing.
 
 ### Per-reminder avatars
 
-A reminder can name its own avatar, which is worn for the performance and
-swapped back afterwards. Reminders that name none use whichever avatar is
-currently on screen.
+A reminder can name its own avatar, which delivers it and then gives the desk
+back. Reminders that name none use whichever avatar is currently on screen.
 
 This is what makes a household of avatars useful: a reminder to pray delivered
 by one person, water and eye breaks by another.
+
+The changeover is on foot, not a cut. Swapping the artwork where the character
+stood turned one person into another mid-stride, which read as a glitch rather
+than as a visit. Instead (`AvatarHandover`): the character on screen runs off
+whichever edge is nearer, the reminder's avatar leans in from that same edge
+and walks to the centre, delivers, walks back out, and the first one returns to
+the exact spot it was using.
+
+Both swaps happen while the character is fully off screen, and each off-screen
+stage waits there until the pack has finished loading — so a slow import is
+absorbed in the one place where nothing can be seen, rather than showing the
+wrong avatar walking in. Those waits time out after six seconds: a pack that
+cannot load must not leave the companion parked beyond the edge of the screen,
+which the user has no way to suspect, let alone fix.
+
+The movement layer refuses to place the companion outside the work area, which
+is what keeps it from ever becoming unreachable. Walking *off* the edge is
+therefore drawn by sliding the character out of a window that clips it — the
+same trick reminder-only mode uses for its peek — not by moving the window off
+screen.
+
+Picking the companion up outranks all of this: the exchange is abandoned where
+it is, the chosen avatar comes straight back, and the character is put back
+inside its window rather than left half-clipped.
 
 ## Logging
 

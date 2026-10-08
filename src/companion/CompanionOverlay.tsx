@@ -101,7 +101,9 @@ function AnimatedCompanion({ runtime }: { readonly runtime: CompanionRuntime }) 
 
   if (!runtime.isAvatarVisible) return null;
   const visiting = runtime.isReminderVisitMode;
-  const visit = runtime.reminderVisit;
+  // Non-null while the character is walking on or off the edge of the screen,
+  // which is the only time it is clipped to its own window.
+  const entrance = runtime.entrance;
   const width = manifest.frameSize.width * runtime.getRenderScale();
   const height = manifest.frameSize.height * runtime.getRenderScale();
 
@@ -117,15 +119,15 @@ function AnimatedCompanion({ runtime }: { readonly runtime: CompanionRuntime }) 
           top: layout.characterOffset.y,
           width,
           height,
-          overflow: visiting ? 'hidden' : undefined,
+          overflow: entrance ? 'hidden' : undefined,
           pointerEvents: visiting ? 'none' : undefined,
         }}
       >
         <div style={{
           width,
           height,
-          transform: visiting
-            ? `translateX(${visit.offset * width}px) rotate(${visit.stage === 'peek' ? (visit.side === 'left' ? 10 : -10) : 0}deg)`
+          transform: entrance
+            ? `translateX(${entrance.offset * width}px) rotate(${entrance.tilt}deg)`
             : undefined,
           transformOrigin: 'center bottom',
         }}>

@@ -32,6 +32,7 @@ import type { DisplayMode, RoamMode, Settings } from '@/settings/types';
 import { ReminderCoordinator } from '@/reminders/ReminderCoordinator';
 import type { Reminder } from '@/reminders/types';
 import { ReminderVisit } from '@/reminders/ReminderVisit';
+import { AvatarHandover, type HandoverStage } from '@/reminders/AvatarHandover';
 import {
   characterOnlyLayout,
   characterRectFor,
@@ -92,6 +93,10 @@ export class CompanionRuntime {
   private sleepEnabled = true;
   /** Entrance and escape choreography for reminder-only appearances. */
   readonly reminderVisit = new ReminderVisit();
+  /** The exchange of avatars around a reminder while free-roaming. */
+  private readonly handover = new AvatarHandover();
+  /** The avatar a handover is fetching, kept until the visit is over. */
+  private visitorAvatarId: string | null = null;
   /** The avatar the user chose, as opposed to one a reminder is borrowing. */
   private chosenAvatarId = DEFAULT_AVATAR_ID;
   /** The avatar revision the loaded artwork belongs to. */
@@ -139,7 +144,7 @@ export class CompanionRuntime {
         player,
         isBusy: () => this.isBusyForReminder(),
         prepareForReminder: (reminder) => this.prepareForReminder(reminder),
-        isReadyForReminder: () => this.roamMode !== 'reminders-only' || this.reminderVisit.stage === 'present',
+        isReadyForReminder: () => this.isReadyForReminder(),
         finishReminder: () => this.finishReminder(),
       },
       this.sound,
@@ -203,6 +208,12 @@ export class CompanionRuntime {
   }
 
   private beginDrag(): void {
+    // Picking the companion up outranks a reminder, including one mid-handover:
+    // the user is holding the character, so it cannot also be walking off.
+    if (this.handover.isActive) {
+      this.reminders.cancelCurrent();
+      this.abortHandover();
+    }
     this.idleMonitor.markActive();
     this.wakeUp();
     this.transition.cancel();
@@ -381,7 +392,11 @@ export class CompanionRuntime {
     }
     this.reminders.update(delta);
 
-    if (this.reminders.isPerforming) {
+    if (this.handover.isActive) {
+      // One avatar is walking out and another in: the choreography owns every
+      // step, including the stretch after the reminder itself has finished.
+      this.updateHandover(delta);
+    } else if (this.reminders.isPerforming) {
       // A reminder owns the companion while it plays: no wandering, no roaming.
     } else if (this.transition.isActive) {
       // While crossing displays the transition owns the companion; ambient
@@ -542,6 +557,7 @@ export class CompanionRuntime {
       this.behavior.interrupt();
       this.transition.cancel();
       this.reminderVisit.reset();
+      this.abortHandover();
       this.movement.stop();
       this.movement.setPosition(this.boundaries.safePosition(), 'idle');
       if (this.roamMode === 'reminders-only' && this.reminders.isPerforming) {
@@ -653,6 +669,7 @@ export class CompanionRuntime {
   private isBusyForReminder(): boolean {
     return (
       this.transition.isActive ||
+      this.handover.isActive ||
       (this.roamMode === 'reminders-only' && this.reminderVisit.stage !== 'hidden') ||
       this.interaction.isDragging ||
       this.movement.getSnapshot().mode === 'held'
@@ -663,14 +680,16 @@ export class CompanionRuntime {
    * Clears the way for a reminder: awake, still, and not mid-wander.
    *
    * Reminder-only appearances start at a side edge; delivery waits for arrival.
+   * While free-roaming, a reminder belonging to a *different* avatar is handed
+   * over on foot instead of swapping the artwork where it stands.
    */
   private prepareForReminder(reminder: Reminder): void {
     this.wakeUp();
     this.idleMonitor.markActive();
     this.behavior.interrupt();
 
-    if (reminder.avatarId) void this.swapAvatar(reminder.avatarId);
     if (this.roamMode === 'reminders-only') {
+      if (reminder.avatarId) void this.swapAvatar(reminder.avatarId);
       const cursor = this.interaction.cursorPosition;
       const target = this.settingsStore?.current.display.remindersOnActiveMonitor && cursor
         ? this.displays.displayContaining(cursor)
@@ -680,7 +699,123 @@ export class CompanionRuntime {
       this.reminderVisit.start(Math.random() < 0.5 ? 'left' : 'right');
       this.updateReminderVisit(0);
       void this.setClickThrough(true);
+      return;
     }
+
+    const visitor = reminder.avatarId;
+    if (visitor && visitor !== this.loadedAvatarId) {
+      this.beginHandover(visitor);
+      return;
+    }
+    // Already wearing the right pack: nothing to hand over.
+    if (visitor) void this.swapAvatar(visitor);
+  }
+
+  /** True once whoever is delivering the reminder is in place to speak. */
+  private isReadyForReminder(): boolean {
+    if (this.roamMode === 'reminders-only') return this.reminderVisit.stage === 'present';
+    return !this.handover.isActive || this.handover.isPresenting;
+  }
+
+  // --- avatar handover ----------------------------------------------------
+
+  /** Sends the roaming character off so the reminder's avatar can walk in. */
+  private beginHandover(visitorId: string): void {
+    this.transition.cancel();
+    this.visitorAvatarId = visitorId;
+    this.handover.setSpeed(this.walkSpeed());
+    this.handover.start(
+      this.movement.getSnapshot().position.x,
+      this.boundaries.currentBounds,
+      this.boundaries.companionSize,
+    );
+    this.movement.stop();
+    log.info(`Handing the desk over to "${visitorId}"`);
+    this.updateHandover(0);
+  }
+
+  /**
+   * Drives one step of the exchange and applies it.
+   *
+   * The two swaps happen on the stage transitions into `swapping` and
+   * `restoring`, the only stages where the character is fully off screen, and
+   * each one holds there until the pack has loaded. A swap anywhere else would
+   * be visible as one character turning into another.
+   */
+  private updateHandover(delta: number): void {
+    const before = this.handover.stage;
+    this.handover.update(delta, this.boundaries.currentBounds, this.boundaries.companionSize);
+    const stage = this.handover.stage;
+
+    if (stage !== before) {
+      if (stage === 'swapping') this.fetchHandoverAvatar(this.visitorAvatarId ?? this.chosenAvatarId);
+      if (stage === 'restoring') this.fetchHandoverAvatar(this.chosenAvatarId);
+    }
+
+    // Applied before the stage is examined, so the last step of the walk home
+    // is not dropped on the frame the exchange ends.
+    const position = this.handover.position;
+    this.movement.setPosition(position, 'idle');
+
+    if (stage === 'idle') {
+      if (before !== 'idle') this.endHandover();
+      return;
+    }
+
+    const outward = this.handover.side === 'left' ? -1 : 1;
+    const towards = this.handover.facing === 'outward' ? outward : -outward;
+    this.movement.faceToward(position.x + towards * 10_000);
+
+    const animation = handoverAnimation(stage);
+    if (animation) {
+      this.player.play(animation, { priority: AnimationPriority.CRITICAL, force: before !== stage });
+    }
+    // Running away reads as running, not as a brisk stroll.
+    this.player.setSpeed(this.animationSpeed() * handoverAnimationSpeed(stage));
+    for (const listener of [...this.settingsListeners]) listener();
+  }
+
+  /** Loads a pack for the current off-screen stage, then lets it continue. */
+  private fetchHandoverAvatar(avatarId: string): void {
+    void this.swapAvatar(avatarId).finally(() => {
+      // The pack that just arrived may walk at a different speed from the one
+      // that left, and the rest of the exchange is its walk, not the other's.
+      this.handover.setSpeed(this.walkSpeed());
+      this.handover.avatarReady();
+    });
+  }
+
+  /** Puts the companion back to ordinary behaviour after an exchange. */
+  private endHandover(): void {
+    this.visitorAvatarId = null;
+    this.player.setSpeed(this.animationSpeed());
+    this.player.play('idle', { priority: AnimationPriority.AMBIENT, force: true });
+    log.info('Handover finished');
+    for (const listener of [...this.settingsListeners]) listener();
+  }
+
+  /**
+   * Abandons an exchange in progress, wherever it had got to.
+   *
+   * Used when something outranks the reminder — the user grabs the companion,
+   * or switches roam mode. The chosen avatar is restored immediately rather
+   * than walked back in: there is no longer a sequence for it to belong to.
+   */
+  private abortHandover(): void {
+    if (!this.handover.isActive) return;
+    this.handover.reset();
+    if (this.loadedAvatarId !== this.chosenAvatarId) {
+      void this.swapAvatar(this.chosenAvatarId);
+    }
+    this.endHandover();
+  }
+
+  private walkSpeed(): number {
+    return this.loadedCharacter.manifest.movement.walkSpeed * this.speedMultiplier;
+  }
+
+  private animationSpeed(): number {
+    return this.settingsStore?.current.character.animationSpeed ?? 1;
   }
 
   /** Moves the window inside the display; the renderer clips the edge peek. */
@@ -704,7 +839,7 @@ export class CompanionRuntime {
         });
       }
     }
-    this.player.setSpeed((this.settingsStore?.current.character.animationSpeed ?? 1) * (stage === 'exit' ? 2.5 : 1));
+    this.player.setSpeed(this.animationSpeed() * (stage === 'exit' ? 2.5 : 1));
     for (const listener of [...this.settingsListeners]) listener();
   }
 
@@ -716,16 +851,45 @@ export class CompanionRuntime {
     return this.roamMode === 'reminders-only';
   }
 
+  /**
+   * How the character is clipped to its window during an entrance or escape,
+   * or null when it is standing on screen as usual.
+   *
+   * The window cannot leave the work area, so walking off the edge is drawn by
+   * sliding the character out of a window that clips it. The renderer needs
+   * only these two numbers; which sequence produced them is not its business.
+   */
+  get entrance(): { readonly offset: number; readonly tilt: number } | null {
+    if (this.roamMode === 'reminders-only') {
+      const peeking = this.reminderVisit.stage === 'peek';
+      return {
+        offset: this.reminderVisit.offset,
+        tilt: peeking ? (this.reminderVisit.side === 'left' ? 10 : -10) : 0,
+      };
+    }
+    if (!this.handover.isActive) return null;
+    const peeking = this.handover.stage === 'peeking';
+    return {
+      offset: this.handover.offset,
+      tilt: peeking ? (this.handover.side === 'left' ? 10 : -10) : 0,
+    };
+  }
+
   /** Run away after delivery, retaining any borrowed avatar until hidden. */
   private finishReminder(): void {
     if (this.roamMode === 'reminders-only') {
       this.reminderVisit.leave();
       return;
     }
+    if (this.handover.isActive) {
+      // The visitor walks out and the roaming character walks back; the swap
+      // back happens off screen, part way through.
+      this.handover.leave();
+      return;
+    }
     if (this.loadedAvatarId !== this.chosenAvatarId) {
       void this.swapAvatar(this.chosenAvatarId);
     }
-
   }
 
   setRemindersPaused(paused: boolean): void {
@@ -977,6 +1141,33 @@ export class CompanionRuntime {
   }
 }
 
+
+/** What the character does during each stage of a handover. */
+function handoverAnimation(stage: HandoverStage): string | null {
+  switch (stage) {
+    case 'clearing':
+    case 'arriving':
+    case 'departing':
+    case 'returning':
+      return 'walk';
+    case 'peeking':
+      return 'idle';
+    // `present` is left alone: the reminder's own animation is playing.
+    default:
+      return null;
+  }
+}
+
+/**
+ * Playback multiplier per stage, matched to how fast the character is actually
+ * travelling in `AvatarHandover` so its feet do not slide.
+ */
+function handoverAnimationSpeed(stage: HandoverStage): number {
+  if (stage === 'clearing') return 2.4;
+  if (stage === 'departing') return 1.6;
+  if (stage === 'arriving') return 0.7;
+  return 1;
+}
 
 /**
  * Loads an avatar, falling back to the bundled default.
