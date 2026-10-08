@@ -6,9 +6,13 @@ A small animated character that lives on your desktop. Cross-platform
 Everything runs locally. No backend, no cloud services, no network access is
 required for any core feature.
 
+**Just want to run it?** [Installing](#installing) · [Using it](#using-it) ·
+[Building from source](#building-from-source) · [Releasing](#releasing) ·
+[Troubleshooting](#troubleshooting)
+
 ## Status
 
-**Phases 1–5 complete.** The companion lives on the desktop, animates, walks
+**Phases 1–10 complete.** The companion lives on the desktop, animates, walks
 around, and understands multi-monitor layouts.
 
 | Phase | What works |
@@ -166,15 +170,285 @@ including the vertically stacked arrangement with the upper display at negative
 y — and assert the companion lands on the right display at the right
 coordinates. **They have not yet been exercised against two real monitors.**
 
-## Running
+## Installing
+
+### From a release
+
+Builds for macOS and Windows are attached to each GitHub release:
+
+<https://github.com/tanvirahmodrafi/Choto-You/releases>
+
+| Platform | Download | Notes |
+| --- | --- | --- |
+| macOS | `Choto You_<version>_universal.dmg` | One disk image for both Intel and Apple Silicon |
+| Windows 10/11 (x64) | `Choto You_<version>_x64-setup.exe` | NSIS installer; the recommended one |
+| Windows 10/11 (x64) | `Choto You_<version>_x64_en-US.msi` | For deployment through group policy or a management tool |
+
+There is no Linux bundle. The overlay depends on per-platform window code
+(`src-tauri/src/platform/`) that has a macOS and a Windows implementation only.
+
+**macOS.** Open the `.dmg` and drag **Choto You** into Applications. The builds
+are not code-signed, so the first launch is blocked: right-click the app in
+Applications, choose **Open**, then confirm at the prompt. Double-clicking it
+the usual way only offers to move it to the Bin. After that first approval it
+launches normally.
+
+The companion has no Dock icon by design — see
+[Known macOS limitations](#known-macos-limitations). Look for the silhouette in
+the menu bar.
+
+**Windows.** Run the `-setup.exe`. SmartScreen warns about an unknown
+publisher, because the installer is unsigned: click **More info** →
+**Run anyway**. The app then appears in the notification area, under the
+overflow arrow if Windows has hidden it.
+
+### Verifying a build you made yourself
+
+1. `npm run tauri:dev`
+2. The character appears on the primary display with no window frame, title
+   bar, background rectangle or drop shadow.
+3. It stays above other windows when you click into another application.
+4. Clicking elsewhere on the desktop still works — the overlay intercepts the
+   cursor only inside the character's hitbox.
+5. The tray icon is present, and **Settings…** opens the settings window.
+
+## Using it
+
+**First launch.** The companion appears on the primary display and starts
+wandering. There is no onboarding and nothing to sign in to; the defaults are
+meant to be usable as they are.
+
+**Interacting with it.** Click for a reaction, double-click for a bigger one,
+drag it anywhere (it falls to the floor when you let go), and right-click to
+open the settings window. Everywhere else, clicks pass straight through to
+whatever is underneath.
+
+**The tray icon** carries the controls you need without opening settings:
+show or hide the companion, pause reminders, open settings, restart, quit. See
+[The tray](#the-tray) for what each item does. Closing the settings window
+hides it rather than quitting — the application lives in the tray.
+
+**Settings** has seven tabs:
+
+| Tab | What you set there |
+| --- | --- |
+| General | Start with computer, launch minimized, sound, show companion |
+| Character | Which avatar, its size, animation speed, and importing your own |
+| Display | Which monitor it lives on: follow the cursor, roam, primary, or a specific one |
+| Reminders | Interval reminders — water, posture, breaks, and any you add yourself |
+| Alarms | Clock alarms at a time of day, with an optional warning beforehand |
+| Behavior | Roam freely, only when reminding you, or stay put |
+| Advanced | Debug hitbox overlay, frame-rate cap, and reset everything to defaults |
+
+Changes apply immediately. Both windows read the same database and are kept in
+step by events, so you never have to restart to see a setting take effect.
+
+**Reminders and alarms** are described in full under
+[Reminders](#reminders) and [Alarms](#alarms). The short version: reminders
+repeat on an interval and can be paused from the tray; alarms fire at a wall
+clock time, ignore the pause, and are dropped rather than announced if they are
+badly late.
+
+**Bringing your own character.** Settings → Character → import. A pack is a
+`character.json` and its images, with no executable code. You can import a
+sprite sheet and have it sliced, or a folder of stills. [Avatars](#avatars)
+covers the format, and [Making one from a photo](#making-one-from-a-photo) the
+generated prompt for producing a sheet from a photograph.
+
+**Leaving it running.** It is built to sit in the tray all day: it sleeps after
+ten minutes without cursor movement, caps its frame rate, and suspends its
+animation loop entirely while hidden.
+
+## Building from source
+
+### Prerequisites
+
+| Requirement | Version | Notes |
+| --- | --- | --- |
+| Node | 20 or newer | `node --version` |
+| Rust | stable, via `rustup` | `rustup toolchain install stable` |
+| macOS | Xcode command line tools | `xcode-select --install` |
+| Windows | MSVC build tools and WebView2 | WebView2 ships with Windows 11 and current Windows 10 |
+
+Tauri's own [prerequisites page](https://v2.tauri.app/start/prerequisites/)
+lists the system packages per platform if a build fails to configure.
+
+If `cargo` and `tauri` are not on your `PATH`, prefix commands with
+`PATH="$HOME/.cargo/bin:$PATH"`.
+
+### Development
 
 ```bash
+git clone https://github.com/tanvirahmodrafi/Choto-You.git
+cd Choto-You
 npm install
-npm run tauri:dev     # dev build with hot reload
-npm run tauri:build   # production bundle
+npm run tauri:dev
 ```
 
-Requires Node 20+ and a stable Rust toolchain (`rustup`).
+`tauri:dev` starts the Vite dev server on port 1420 and launches the app
+against it, so frontend edits hot-reload. Rust changes trigger a rebuild and a
+restart, which takes noticeably longer — the first one longest of all, since the
+whole dependency tree compiles.
+
+Logs go to the terminal in a dev build, and to a rotating file in the OS log
+directory in both:
+
+| Platform | Log directory |
+| --- | --- |
+| macOS | `~/Library/Logs/com.chotoyou.app/` |
+| Windows | `%LOCALAPPDATA%\com.chotoyou.app\logs\` |
+
+### Checks before handing work back
+
+```bash
+npm test          # Vitest, once
+npm run typecheck # tsc --noEmit, strict
+cargo fmt --check --manifest-path src-tauri/Cargo.toml   # if Rust changed
+```
+
+CI runs these on every push and pull request, and additionally compiles the
+Rust crate on both macOS and Windows with `clippy -D warnings`. The Windows leg
+is the point of it: development happens on macOS, so a break in
+`platform/windows.rs` would otherwise stay hidden until release day.
+
+### Producing a bundle locally
+
+```bash
+npm run tauri:build
+```
+
+That runs `npm run build` first (typecheck plus the Vite bundle), then compiles
+the crate in release mode and packages it. `bundle.targets` is `"all"`, so
+every installer format the host platform can produce is built. Output lands
+under `src-tauri/target/release/bundle/`:
+
+| Platform | Artifact | Path |
+| --- | --- | --- |
+| macOS | App bundle | `macos/Choto You.app` |
+| macOS | Disk image | `dmg/Choto You_<version>_<arch>.dmg` |
+| Windows | NSIS installer | `nsis/Choto You_<version>_x64-setup.exe` |
+| Windows | MSI | `msi/Choto You_<version>_x64_en-US.msi` |
+
+To skip the installers and get only the runnable app — much faster, and what
+you want while iterating on release behaviour:
+
+```bash
+npm run tauri -- build --bundles app     # macOS
+```
+
+A universal macOS binary needs both architectures installed, because Tauri
+builds each and merges them with `lipo`:
+
+```bash
+rustup target add aarch64-apple-darwin x86_64-apple-darwin
+npm run tauri -- build --target universal-apple-darwin
+```
+
+Cross-compiling between macOS and Windows is not supported. Each platform's
+installers are built on that platform, which is what the release workflow does.
+
+## Releasing
+
+Releases are built by `.github/workflows/release.yml` on GitHub Actions, one
+job per platform, and attached to a **draft** GitHub release. Nothing is
+published automatically.
+
+1. Bump the version in **both** `package.json` and
+   `src-tauri/tauri.conf.json`. They are separate files and must agree; the
+   bundle takes its version from the Tauri config and the installer file names
+   follow it.
+2. Run the checks above, and commit.
+3. Tag and push:
+
+   ```bash
+   git tag v1.1.0
+   git push origin main
+   git push origin v1.1.0
+   ```
+
+4. Watch the two jobs in the Actions tab. `fail-fast` is off, so one platform
+   failing does not discard the other's artifacts.
+5. Smoke-test the Windows installer before publishing. The overlay behaviour
+   there is barely exercised, which is the reason the release is left as a
+   draft.
+6. Edit the release notes and publish.
+
+A tag that already exists can be built again from the Actions tab:
+**Release** → **Run workflow**, giving the tag name. The workflow checks that
+tag out rather than the default branch.
+
+### Code signing
+
+The published builds are unsigned, which is why users have to click through
+Gatekeeper and SmartScreen on first launch. To sign and notarize the macOS
+build, add these repository secrets and uncomment the matching `env` entries in
+`release.yml`:
+
+`APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`,
+`APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`.
+
+Signing requires a paid Apple Developer account; Windows signing requires a
+code-signing certificate. Neither is set up.
+
+### The app does not auto-update
+
+There is no updater plugin and no update endpoint, deliberately: the
+no-network-access property in the first paragraph of this file is worth more
+than the convenience. Upgrading means installing the new version over the old
+one, which keeps your data — the app's data directory is derived from the
+bundle identifier, and that has not changed.
+
+## Where your data lives
+
+| Platform | Directory |
+| --- | --- |
+| macOS | `~/Library/Application Support/com.chotoyou.app/` |
+| Windows | `%APPDATA%\com.chotoyou.app\` |
+
+It holds `companion.db` (settings, reminders, alarms, the saved position) with
+its SQLite sidecars, and `avatars/` for imported character packs. Backing the
+directory up copies everything; deleting it resets the app to a first launch.
+
+### Uninstalling
+
+1. Turn off **Start with computer** in Settings → General, or remove the login
+   item in the OS afterwards, then quit from the tray.
+2. macOS: drag **Choto You** from Applications to the Bin.
+   Windows: uninstall it from Settings → Apps.
+3. Delete the data directory above if you want the settings gone too. The
+   uninstaller leaves it in place.
+
+## Troubleshooting
+
+**Nothing appears after launching.** Check whether the companion is hidden:
+tray icon → **Show Choto You**. Display enumeration can legitimately return
+nothing during wake or at login, so startup waits up to a minute for a display
+and retries the whole sequence three times — see
+[Startup recovery](#startup-recovery). If it is still blank, the log file says
+which step gave up.
+
+**macOS says the app is damaged or cannot be opened.** That is Gatekeeper on an
+unsigned build, not a corrupt download. Right-click the app in Applications and
+choose **Open**.
+
+**The character froze in place.** It stalls if the overlay is left on a Space
+you are not looking at, because WebKit throttles timers in a hidden webview.
+The current window policy prevents it; `Ticker` warns to the log when the loop
+stalls, so check there and file an issue with the surrounding lines.
+
+**Clicks are not reaching the application underneath.** The overlay intercepts
+only inside the hitbox declared in `character.json`. Settings → Advanced →
+**Debug mode** draws it, which usually shows the pack declaring a hitbox far
+larger than its drawing.
+
+**A setting made the companion unusable.** Settings → Advanced →
+**Reset…** puts everything back to its default. Values read from the database
+are clamped on load, so a hand-edited or out-of-range value costs its own
+default rather than preventing startup.
+
+**The build fails before compiling.** `tauri-build` needs `frontendDist`
+(`../dist`) to exist; run `npm run build` first if you are invoking `cargo`
+directly.
 
 ## Scripts
 
@@ -183,10 +457,13 @@ Requires Node 20+ and a stable Rust toolchain (`rustup`).
 | `npm run tauri:dev` | Runs the app with the Vite dev server |
 | `npm run tauri:build` | Builds the installable bundle |
 | `npm test` | Runs the unit tests |
+| `npm run test:watch` | Runs the unit tests in watch mode |
 | `npm run typecheck` | Strict TypeScript check, no emit |
+| `npm run build` | Typecheck plus the frontend bundle, without packaging |
 | `npm run assets:character` | Rebuilds the bundled avatar from `art/avatar-sheet.png` |
 | `npm run assets:icon` | Rebuilds the application icon set from `art/app-icon.png` |
 | `npm run assets:tray` | Rebuilds the menu bar silhouette from the bundled avatar |
+| `npm run assets:sample-sheet` | Writes `samples/sample-avatar-sheet.png` for testing sheet import |
 
 ## Layout
 
@@ -625,12 +902,8 @@ converts with the scale factor of the display the window currently occupies, so
 stepping from a 1x display onto a 2x one would be converted at 1x and place the
 window in the gap between their physical rects, where nothing is visible.
 
-## Verifying Phase 1
+---
 
-1. `npm run tauri:dev`
-2. The character appears centred on the primary display with no window frame,
-   no title bar, no background rectangle and no drop shadow.
-3. It stays above other windows when you click into another application.
-4. Clicking elsewhere on the desktop still works normally — the overlay is only
-   96x96 points, not a full-screen layer.
-5. The settings window does not open; that is intentional until Phase 8.
+Contributor conventions — style, naming, commit and PR expectations — are in
+[`AGENTS.md`](AGENTS.md). What the code does and the invariants that are easy
+to break by accident are in [`CLAUDE.md`](CLAUDE.md).
