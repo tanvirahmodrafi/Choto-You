@@ -60,6 +60,10 @@ export class ReminderVisit {
       x = edge + (centre - edge) * t * t * (3 - 2 * t);
     }
     if (this.stage === 'exit') x = centre + (edge - centre) * Math.min(1, this.elapsed / 0.9);
-    return { x, y: bounds.y + Math.max(0, (bounds.height - size.height) / 2) };
+    // Stand on the bottom of the work area, the same ground the companion
+    // walks on the rest of the time — a reminder that floats in at the
+    // vertical centre of the display reads as a popup, not as the character
+    // sneaking in.
+    return { x, y: bounds.y + Math.max(0, bounds.height - size.height) };
   }
 }

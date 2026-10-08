@@ -25,7 +25,7 @@ describe('reminder-only visit', () => {
     expect(visit.position(bounds, size).x).toBe(side === 'left' ? -1920 : -120);
     visit.update(2);
     expect(visit.stage).toBe('present');
-    expect(visit.position(bounds, size)).toEqual({ x: -1020, y: 280 });
+    expect(visit.position(bounds, size)).toEqual({ x: -1020, y: 760 });
     expect(visit.offset).toBe(0);
     visit.update(60);
     expect(visit.stage).toBe('present');
@@ -45,6 +45,18 @@ describe('reminder-only visit', () => {
     expect(visit.offset).toBeGreaterThan(0.5);
     visit.update(0.2);
     expect(visit.stage).toBe('hidden');
+  });
+
+  it('stands on the bottom of the work area at every stage', () => {
+    const visit = new ReminderVisit();
+    const ground = bounds.y + bounds.height - size.height;
+    visit.start('left');
+    for (const _ of [0, 1, 2, 3]) {
+      expect(visit.position(bounds, size).y).toBe(ground);
+      visit.update(1.2);
+    }
+    visit.leave();
+    expect(visit.position(bounds, size).y).toBe(ground);
   });
 
   it('handles long ticks and resets without leaving a half-visible avatar', () => {
