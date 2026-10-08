@@ -1,0 +1,586 @@
+/*
+ * Settings window styling.
+ *
+ * Deliberately plain: this is a utility window the user opens occasionally,
+ * and a quiet interface keeps the companion itself the interesting part.
+ */
+
+:root {
+  --bg: #f4f6f7;
+  --panel: #ffffff;
+  --text: #1b2733;
+  --muted: #5d6c78;
+  --line: #dde3e7;
+  --accent: #2e8b84;
+  --danger: #b4453c;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #171c21;
+    --panel: #1f262c;
+    --text: #e8eef1;
+    --muted: #9aa8b3;
+    --line: #2d363d;
+    --accent: #6bd6c7;
+    --danger: #e0756a;
+  }
+}
+
+html,
+body,
+#settings-root {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.settings--message {
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  padding: 24px;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+/* --- tabs --------------------------------------------------------------- */
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: 10px 12px 0;
+  border-bottom: 1px solid var(--line);
+  /* The window is draggable by its empty chrome area. */
+  flex: 0 0 auto;
+}
+
+.tabs__tab {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  padding: 7px 12px;
+  border-radius: 7px 7px 0 0;
+  cursor: pointer;
+}
+
+.tabs__tab:hover {
+  color: var(--text);
+}
+
+.tabs__tab[data-active='true'] {
+  color: var(--text);
+  background: var(--panel);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+/* --- panels ------------------------------------------------------------- */
+
+.panel {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 16px 18px 24px;
+}
+
+.section__title {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.section__body {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+.row__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.row__label {
+  font-weight: 500;
+}
+
+.row__hint {
+  color: var(--muted);
+  font-size: 12px;
+  /* Long reminder messages must not stretch the window. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row__control {
+  flex: 0 0 auto;
+}
+
+.reminder + .reminder {
+  border-top: 2px solid var(--line);
+}
+
+/* --- controls ----------------------------------------------------------- */
+
+.toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle__track {
+  display: inline-block;
+  width: 38px;
+  height: 22px;
+  border-radius: 11px;
+  background: var(--line);
+  transition: background 120ms ease;
+  cursor: pointer;
+}
+
+.toggle__thumb {
+  display: block;
+  width: 18px;
+  height: 18px;
+  margin: 2px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 120ms ease;
+}
+
+.toggle input:checked + .toggle__track {
+  background: var(--accent);
+}
+
+.toggle input:checked + .toggle__track .toggle__thumb {
+  transform: translateX(16px);
+}
+
+.toggle input:focus-visible + .toggle__track {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.slider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.slider input {
+  width: 150px;
+  accent-color: var(--accent);
+}
+
+.slider__value {
+  min-width: 52px;
+  text-align: right;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.choice {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 5px 8px;
+}
+
+.button {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 5px 11px;
+  cursor: pointer;
+}
+
+.button:hover {
+  border-color: var(--accent);
+}
+
+.button[data-tone='danger'] {
+  color: #fff;
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+.text-input {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 5px 8px;
+  width: 220px;
+}
+
+.text-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.confirm {
+  display: flex;
+  gap: 8px;
+}
+
+/* A row whose control is too wide to sit beside its label. */
+.row[data-stack='true'] {
+  display: block;
+}
+
+.row[data-stack='true'] .row__control {
+  margin-top: 10px;
+}
+
+/* --- avatar picker ------------------------------------------------------- */
+
+.avatars__error,
+.import__error {
+  color: var(--danger);
+  margin: 0 0 10px;
+  font-size: 13px;
+}
+
+.avatars__grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  /* Fills the panel at any width rather than a fixed column count, so the
+     window stays usable at its 640px minimum. */
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 10px;
+}
+
+.avatar {
+  font: inherit;
+  color: inherit;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 6px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: center;
+}
+
+.avatar:hover {
+  border-color: var(--accent);
+}
+
+.avatar[data-selected='true'] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.avatar__frame,
+.import__frame {
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+}
+
+.avatar__image,
+.import__preview {
+  max-width: 100%;
+  max-height: 100%;
+  image-rendering: auto;
+}
+
+.avatar__placeholder,
+.import__empty {
+  width: 36px;
+  height: 36px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+}
+
+.avatar__name {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.avatar__meta {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.avatar__delete {
+  font: inherit;
+  font-size: 11px;
+  color: var(--danger);
+  background: none;
+  border: 0;
+  padding: 3px 0 0;
+  width: 100%;
+  cursor: pointer;
+}
+
+.avatar__delete:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.avatars__actions {
+  margin-top: 12px;
+}
+
+/* --- importing a still avatar -------------------------------------------- */
+
+.import {
+  margin-top: 12px;
+  padding: 14px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.import__title {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.import__hint {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.import__name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.import__name input {
+  font: inherit;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 5px 8px;
+  flex: 1;
+}
+
+.import__slots {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.import__slot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.import__text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.import__label {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.import__required {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--accent);
+}
+
+.import__slotHint {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.import__file {
+  font-size: 11px;
+  color: var(--muted);
+  /* Long file names must not stretch the row. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The native file input is unstyleable, so the label is the button. */
+.import__choose {
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 5px 10px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.import__choose:hover {
+  border-color: var(--accent);
+}
+
+.import__choose input {
+  display: none;
+}
+
+.import__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+/* --- making an avatar from a photo --------------------------------------- */
+
+.import__steps {
+  margin: 0 0 12px;
+  padding-left: 20px;
+  font-size: 12px;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.import__prompt {
+  font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  width: 100%;
+  margin-top: 10px;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.import__sheet {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.import__toggleRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.import__cells {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  /* Eight across, matching the sheet's own grid, so the preview reads as the
+     sheet rather than as an unrelated list of pictures. */
+  grid-template-columns: repeat(8, 1fr);
+  gap: 6px;
+}
+
+.import__cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 2px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+/* A checkerboard makes it obvious whether the background really came out
+   transparent, which is the single most common thing to go wrong. */
+.import__cell img {
+  width: 100%;
+  height: 64px;
+  object-fit: contain;
+  background-image:
+    linear-gradient(45deg, var(--line) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--line) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--line) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--line) 75%);
+  background-size: 10px 10px;
+  background-position: 0 0, 0 5px, 5px -5px, -5px 0;
+  border-radius: 4px;
+}
+
+.import__cell[data-empty='true'] {
+  opacity: 0.4;
+}
+
+.avatars__actions {
+  display: flex;
+  gap: 8px;
+}

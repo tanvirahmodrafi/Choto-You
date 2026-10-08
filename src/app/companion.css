@@ -1,0 +1,140 @@
+/*
+ * The overlay window is transparent end-to-end. Every element in the chain
+ * (html, body, roots) must have a transparent background or the window will
+ * render as an opaque rectangle regardless of the Tauri window flags.
+ */
+html,
+body,
+#companion-root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+}
+
+body {
+  /* Nothing in the overlay is selectable text, and nothing is draggable as an
+     image — the character is dragged by moving the window instead. */
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
+.overlay {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* Positioned by the layout: the character is not always at the window origin,
+   because the window grows above it to make room for a speech bubble. */
+.overlay__character {
+  position: absolute;
+}
+
+.character {
+  position: absolute;
+  left: 0;
+  top: 0;
+  /* Imported frames can contain high-resolution facial and clothing detail. */
+  image-rendering: auto;
+}
+
+.character__frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.character__hitbox {
+  position: absolute;
+  /* The only interactive region in the overlay. */
+  cursor: grab;
+}
+
+.character__hitbox:active {
+  cursor: grabbing;
+}
+
+/* Debug mode makes the otherwise invisible hitbox visible. */
+.character__hitbox[data-debug='true'] {
+  border: 1px solid rgba(255, 64, 128, 0.9);
+  background: rgba(255, 64, 128, 0.12);
+}
+
+/* --- speech bubble ------------------------------------------------------ */
+
+.bubble {
+  position: absolute;
+  pointer-events: none;
+  display: flex;
+  align-items: flex-end;
+}
+
+.bubble__body {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  /* Leave room for the tail below the box. */
+  margin-bottom: 7px;
+  padding: 10px 13px;
+  border-radius: 13px;
+  background: #f7fbfb;
+  color: #1b2733;
+  border: 2px solid #1f3e48;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  line-height: 1.35;
+  /* The bubble is the one part of the overlay that is a readable surface, so
+     it carries a shadow even though the window itself has none. */
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.22);
+  transition: opacity 140ms ease-out, transform 140ms ease-out;
+}
+
+.bubble[data-visible='false'] .bubble__body {
+  opacity: 0;
+  transform: scale(0.88) translateY(4px);
+}
+
+.bubble[data-visible='true'] .bubble__body {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+}
+
+.bubble__text {
+  margin: 0;
+  /* Long custom reminders must not overflow the fixed bubble box. */
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+/* A square rotated 45deg, with two borders showing, makes the tail. */
+.bubble__tail {
+  position: absolute;
+  bottom: -7px;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  background: #f7fbfb;
+  border-right: 2px solid #1f3e48;
+  border-bottom: 2px solid #1f3e48;
+  transform: rotate(45deg);
+}
+
+@media (prefers-color-scheme: dark) {
+  .bubble__body {
+    background: #20323a;
+    color: #e8f3f1;
+    border-color: #7fd8c8;
+  }
+
+  .bubble__tail {
+    background: #20323a;
+    border-color: #7fd8c8;
+  }
+}

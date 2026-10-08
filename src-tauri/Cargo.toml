@@ -1,0 +1,44 @@
+[package]
+name = "choto-you"
+version = "0.1.0"
+description = "Choto You — a companion that lives on your desktop"
+authors = ["Choto You"]
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+# Tauri 2 builds the app as a library so mobile targets can reuse it; the
+# desktop binary in src/main.rs is a thin wrapper around `run()`.
+name = "choto_you_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# `macos-private-api` is required for a genuinely transparent window on macOS.
+# `protocol-asset` serves the avatars the user imported, which live outside the
+# bundle in the app data directory; its scope is set in tauri.conf.json.
+tauri = { version = "2", features = ["macos-private-api", "tray-icon", "image-png", "protocol-asset"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+log = "0.4"
+tauri-plugin-log = "2"
+tauri-plugin-sql = { version = "2", features = ["sqlite"] }
+tauri-plugin-autostart = "2"
+
+# macOS needs direct AppKit access to make the overlay float over other apps'
+# fullscreen Spaces; Tauri exposes no cross-platform API for that.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = ["NSWindow", "NSResponder"] }
+
+[features]
+default = []
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

@@ -1,0 +1,43 @@
+{
+  "name": "choto-you",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Choto You \u2014 a cross-platform companion that lives on your desktop.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "assets:character": "node tools/generate-placeholder-character.mjs",
+    "assets:icon": "node tools/generate-app-icon.mjs && tauri icon src-tauri/icons/source.png",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "assets:tray": "node tools/generate-tray-icon.mjs",
+    "assets:sample-sheet": "node tools/generate-sample-sheet.mjs"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.9.0",
+    "@tauri-apps/plugin-autostart": "^2.7.0",
+    "@tauri-apps/plugin-log": "^2.10.0",
+    "@tauri-apps/plugin-sql": "^2.5.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.9.0",
+    "@types/node": "^26.6.4",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.1.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.0",
+    "vitest": "^5.0.3"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}

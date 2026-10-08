@@ -1,0 +1,22 @@
+[
+  {
+    "id": "pip",
+    "name": "Pip",
+    "thumbnail": "pip/thumbnail.png"
+  },
+  {
+    "id": "mochi",
+    "name": "Mochi",
+    "thumbnail": "mochi/thumbnail.png"
+  },
+  {
+    "id": "nimbus",
+    "name": "Nimbus",
+    "thumbnail": "nimbus/thumbnail.png"
+  },
+  {
+    "id": "ember",
+    "name": "Ember",
+    "thumbnail": "ember/thumbnail.png"
+  }
+]
