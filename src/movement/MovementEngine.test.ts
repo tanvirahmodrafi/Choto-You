@@ -168,6 +168,27 @@ describe('MovementEngine', () => {
     expect(first).toHaveBeenCalledWith('cancelled');
   });
 
+  it('settles the walk when it is placed directly on another display', () => {
+    // Regression: moving the companion to a different display (or restoring a
+    // saved position) placed it with `setPosition`, which left the pending
+    // settle callback dangling. The wander behaviour went on believing it was
+    // still walking and never picked another destination, so the companion
+    // stood in one spot indefinitely while "roam freely" was on.
+    const { engine } = makeEngine(bounds, 0);
+    const settled = vi.fn();
+    engine.walkTo(1000, settled);
+
+    engine.setPosition({ x: 400, y: 0 }, 'idle');
+
+    expect(settled).toHaveBeenCalledTimes(1);
+    expect(settled).toHaveBeenCalledWith('cancelled');
+    expect(engine.getSnapshot().mode).toBe('idle');
+
+    // The walk must not resume towards the abandoned target.
+    engine.update(1);
+    expect(engine.getSnapshot().position.x).toBe(400);
+  });
+
   it('cancels the walk when the companion is grabbed', () => {
     const { engine } = makeEngine(bounds, 0);
     const settled = vi.fn();

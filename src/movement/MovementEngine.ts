@@ -123,12 +123,26 @@ export class MovementEngine {
     notify?.('cancelled');
   }
 
-  /** Places the companion directly, e.g. while being dragged. */
+  /**
+   * Places the companion directly, e.g. while being dragged or when a display
+   * appears, disappears or is re-ordered underneath it.
+   *
+   * A walk in progress is abandoned rather than left dangling: `walkTo`
+   * promises exactly one settle callback, and a behaviour layer still waiting
+   * for one would never pick a new destination — the companion would stand in
+   * place for good, with nothing in the log to say why.
+   */
   setPosition(position: Vector2, mode: MovementMode = this.mode): void {
+    const notify = this.onSettled;
+    this.targetX = null;
+    this.onSettled = undefined;
     this.position = this.boundaries.clampPosition(position);
     this.mode = mode;
     this.velocityY = 0;
     this.publish();
+    // Last, so a listener that starts a new walk sees the position it is
+    // actually walking from.
+    notify?.('cancelled');
   }
 
   /**
