@@ -1,6 +1,6 @@
 [package]
 name = "choto-you"
-version = "1.0.0"
+version = "1.0.1"
 description = "Choto You — a companion that lives on your desktop"
 authors = ["Choto You"]
 edition = "2021"
