@@ -1,0 +1,115 @@
+name: Release
+
+# Builds installers for macOS and Windows and attaches them to a GitHub release.
+#
+# Triggered by pushing a version tag:
+#
+#     git tag v1.0.0 && git push origin v1.0.0
+#
+# or manually from the Actions tab, where it asks for the tag to publish.
+#
+# The release is created as a DRAFT. Both platform jobs attach their artifacts
+# to the same draft; publish it by hand once the Windows installer has been
+# smoke-tested, since the overlay behaviour there is barely exercised.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish (e.g. v1.0.0) — must already exist"
+        required: true
+
+# tauri-action needs write access to create the release and upload assets.
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.platform }}
+
+    strategy:
+      # One platform failing should not discard the other's artifacts.
+      fail-fast: false
+      matrix:
+        include:
+          # A universal binary means one .dmg for both Intel and Apple Silicon
+          # Macs. Tauri produces it by building each arch and merging with lipo,
+          # so BOTH Rust targets have to be installed.
+          - platform: macos-latest
+            label: macOS (universal)
+            rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
+            build_args: --target universal-apple-darwin
+
+          # Gives the NSIS installer (…-setup.exe) and the WiX installer (.msi),
+          # because bundle.targets is "all" in tauri.conf.json.
+          - platform: windows-latest
+            label: Windows (x64)
+            rust_targets: x86_64-pc-windows-msvc
+            build_args: --target x86_64-pc-windows-msvc
+
+    steps:
+      - name: Check out the tag
+        uses: actions/checkout@v4
+        with:
+          # workflow_dispatch starts from the default branch, so check out the
+          # tag the user asked for instead.
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_targets }}
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          # The crate lives in src-tauri/, not the repo root.
+          workspaces: src-tauri -> target
+          # Keyed per platform so the two jobs never share a cache entry.
+          key: ${{ matrix.platform }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and attach to the release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Code signing is not set up. Add these as repository secrets to sign
+          # and notarize the macOS build, which removes the Gatekeeper warning:
+          #
+          # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          # APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          # APPLE_ID: ${{ secrets.APPLE_ID }}
+          # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          # tauri-action runs beforeBuildCommand (npm run build) itself, which
+          # covers typecheck + vite build. No separate frontend step needed.
+          tagName: ${{ github.event.inputs.tag || github.ref_name }}
+          releaseName: Choto You __VERSION__
+          releaseBody: |
+            ## Downloads
+
+            - **macOS** — `.dmg` (universal: Intel and Apple Silicon)
+            - **Windows** — `-setup.exe` (recommended) or `.msi`
+
+            These builds are unsigned.
+
+            On macOS the first launch is blocked by Gatekeeper: right-click the
+            app in Applications, choose **Open**, then confirm. On Windows,
+            SmartScreen shows a warning — click **More info** → **Run anyway**.
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.build_args }}
