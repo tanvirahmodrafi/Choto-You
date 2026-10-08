@@ -232,11 +232,10 @@ pub fn describe_visibility(window: &WebviewWindow) -> String {
         Ok(handle) if !handle.is_null() => handle,
         _ => return "no native window".to_string(),
     };
-    let ns_window: Retained<NSWindow> =
-        match unsafe { Retained::retain(handle as *mut NSWindow) } {
-            Some(w) => w,
-            None => return "null NSWindow".to_string(),
-        };
+    let ns_window: Retained<NSWindow> = match unsafe { Retained::retain(handle as *mut NSWindow) } {
+        Some(w) => w,
+        None => return "null NSWindow".to_string(),
+    };
 
     format!(
         "isVisible={} isOnActiveSpace={} occlusionState={:?} level={} alpha={} behavior={:?}",

@@ -27,7 +27,8 @@ const ID_QUIT: &str = "quit";
 /// Builds the tray icon and installs its menu.
 pub fn install<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let show = CheckMenuItem::with_id(app, ID_SHOW, "Show Choto You", true, true, None::<&str>)?;
-    let pause = CheckMenuItem::with_id(app, ID_PAUSE, "Pause reminders", true, false, None::<&str>)?;
+    let pause =
+        CheckMenuItem::with_id(app, ID_PAUSE, "Pause reminders", true, false, None::<&str>)?;
     let settings = MenuItem::with_id(app, ID_SETTINGS, "Settings…", true, None::<&str>)?;
     let restart = MenuItem::with_id(app, ID_RESTART, "Restart Choto You", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, ID_QUIT, "Quit", true, None::<&str>)?;
@@ -97,13 +98,20 @@ fn toggle_companion<R: Runtime>(app: &AppHandle<R>) {
     };
 
     let visible = window.is_visible().unwrap_or(false);
-    let result = if visible { window.hide() } else { window.show() };
+    let result = if visible {
+        window.hide()
+    } else {
+        window.show()
+    };
     if let Err(error) = result {
         log::error!("[WINDOW] Could not toggle the companion: {error}");
         return;
     }
 
-    log::info!("[WINDOW] Companion {}", if visible { "hidden" } else { "shown" });
+    log::info!(
+        "[WINDOW] Companion {}",
+        if visible { "hidden" } else { "shown" }
+    );
     // The overlay suspends its animation loop when hidden; a hidden webview
     // would otherwise keep a timer alive for a character nobody can see.
     emit_action(app, if visible { "hidden" } else { "shown" });

@@ -107,7 +107,8 @@ pub fn save_user_avatar(
     // A staging directory left by a previous failure must not contaminate this
     // import.
     let _ = fs::remove_dir_all(&staging);
-    fs::create_dir_all(&staging).map_err(|e| format!("Could not create the pack directory: {e}"))?;
+    fs::create_dir_all(&staging)
+        .map_err(|e| format!("Could not create the pack directory: {e}"))?;
 
     let result = (|| -> Result<(), String> {
         for image in &images {
@@ -227,7 +228,7 @@ fn sanitize_id(raw: &str) -> Result<String, String> {
 /// argument for adding a crate.
 fn decode_base64(input: &str) -> Result<Vec<u8>, String> {
     // A caller that passed the whole data URL gets the prefix stripped rather
-            // than a confusing decode error.
+    // than a confusing decode error.
     let payload = match input.find("base64,") {
         Some(index) => &input[index + "base64,".len()..],
         None => input,
