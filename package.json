@@ -1,9 +1,9 @@
 {
   "name": "choto-you",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
-  "description": "Choto You \u2014 a cross-platform companion that lives on your desktop.",
+  "description": "Choto You — a cross-platform companion that lives on your desktop.",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
