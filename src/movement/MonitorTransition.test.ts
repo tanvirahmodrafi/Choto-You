@@ -90,6 +90,21 @@ describe('MonitorTransition', () => {
     expect(movement.getSnapshot().position.y).toBe(-100);
   });
 
+  it('leaves the companion idle after crossing upward, free to wander again', () => {
+    const { transition, movement, boundaries } = setup();
+    transition.begin('lower', 'up', {
+      onEnterDisplay: (display) => boundaries.setBounds(display.workArea),
+      onComplete: vi.fn(),
+    });
+    run(transition, movement, 12);
+
+    // The upward entry point is already on the floor, so the fall ends without
+    // ever being airborne; a mode left at 'falling' would freeze the companion
+    // on the display it just arrived at.
+    expect(movement.getSnapshot().mode).toBe('idle');
+    expect(movement.getSnapshot().grounded).toBe(true);
+  });
+
   it('falls onto the display below when crossing downward', () => {
     const boundaries = new BoundaryDetector(UPPER.workArea, SIZE);
     const movement = new MovementEngine(boundaries, { x: 500, y: boundaries.groundY });

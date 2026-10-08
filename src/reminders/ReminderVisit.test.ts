@@ -17,27 +17,35 @@ describe('reminder-only visit', () => {
     expect(visit.position(bounds, size).x).toBe(bounds.x);
   });
 
-  it.each(['left', 'right'] as const)('enters from the %s edge and waits at the centre', (side) => {
-    const visit = new ReminderVisit();
-    visit.start(side);
-    visit.update(1.6);
-    expect(visit.stage).toBe('enter');
-    expect(visit.position(bounds, size).x).toBe(side === 'left' ? -1920 : -120);
-    visit.update(2);
-    expect(visit.stage).toBe('present');
-    expect(visit.position(bounds, size)).toEqual({ x: -1020, y: 760 });
-    expect(visit.offset).toBe(0);
-    visit.update(60);
-    expect(visit.stage).toBe('present');
-  });
+  it.each(['left', 'right'] as const)(
+    'enters from the %s edge and delivers from that corner, not the middle',
+    (side) => {
+      const visit = new ReminderVisit();
+      visit.start(side);
+      visit.update(1.6);
+      expect(visit.stage).toBe('enter');
+      expect(visit.position(bounds, size).x).toBe(side === 'left' ? -1920 : -120);
 
-  it('runs back faster than entry and disappears beyond the edge', () => {
+      visit.update(1.1);
+      expect(visit.stage).toBe('present');
+      // Eighteen pixels in from the edge it came from: clear of the edge, and
+      // nowhere near the middle of the display, which is -1020 here.
+      expect(visit.position(bounds, size)).toEqual({ x: side === 'left' ? -1902 : -138, y: 760 });
+      expect(visit.offset).toBe(0);
+
+      visit.update(60);
+      expect(visit.stage).toBe('present');
+    },
+  );
+
+  it('runs back and disappears beyond the edge', () => {
     const visit = new ReminderVisit();
     visit.start('right');
     visit.update(4);
     visit.leave();
     visit.update(0.45);
-    expect(visit.position(bounds, size).x).toBe(-570);
+    // Half way back from the corner to the edge it came from.
+    expect(visit.position(bounds, size).x).toBe(-129);
     visit.update(0.45);
     expect(visit.stage).toBe('hide');
     expect(visit.position(bounds, size).x).toBe(-120);

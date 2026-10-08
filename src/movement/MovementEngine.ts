@@ -168,6 +168,7 @@ export class MovementEngine {
     if (this.mode === 'held') return;
 
     const previous = this.position;
+    const previousMode = this.mode;
     let { x, y } = this.position;
 
     if (this.mode === 'walking' && this.targetX !== null) {
@@ -201,12 +202,20 @@ export class MovementEngine {
         this.velocityY = 0;
         if (this.mode === 'falling') this.mode = 'idle';
       }
-    } else if (this.velocityY !== 0) {
+    } else {
+      // Already standing on the floor. A fall that is over has to be declared
+      // over here as well as on touchdown above: a crossing to the display
+      // *above* arrives standing on its floor, so the fall never has a frame
+      // in which it is airborne. A mode left at 'falling' would then never
+      // clear — the companion looks idle but wandering, roaming and the
+      // position store all skip it, and it stands there until something else
+      // moves it.
       this.velocityY = 0;
+      if (this.mode === 'falling') this.mode = 'idle';
     }
 
     const next = this.boundaries.clampPosition({ x, y });
-    if (next.x === previous.x && next.y === previous.y) return;
+    if (next.x === previous.x && next.y === previous.y && this.mode === previousMode) return;
     this.position = next;
     this.publish();
   }

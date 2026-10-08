@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AnimationPlayer } from '@/animation/AnimationPlayer';
 import { SoundPlayer } from '@/services/SoundPlayer';
+import type { Alarm } from '@/alarms/types';
 import { ReminderCoordinator } from './ReminderCoordinator';
 import type { Reminder } from './types';
 
@@ -10,7 +11,17 @@ const reminder: Reminder = {
   lastTriggered: null, nextTrigger: 1000,
 };
 
-function setup() {
+/** An alarm due at `at`, with no early warning. */
+function alarmAt(at: number): Alarm {
+  return {
+    id: 'standup', label: 'Standup', message: '', enabled: true,
+    atMinutes: new Date(at).getHours() * 60 + new Date(at).getMinutes(),
+    repeatDaily: false, leadMinutes: 0, avatarId: null,
+    nextTrigger: at, leadDone: false, lastTriggered: null,
+  };
+}
+
+function setup(options: { readonly alarms?: readonly Alarm[] } = {}) {
   vi.useFakeTimers();
   vi.setSystemTime(0);
   const player = new AnimationPlayer(new Map(['idle', 'wave'].map((name) => [name, {
@@ -27,6 +38,9 @@ function setup() {
   const play = vi.spyOn(sound, 'play').mockImplementation(() => undefined);
   const coordinator = new ReminderCoordinator(host, sound);
   coordinator.adopt({ saveAll: vi.fn(async () => undefined) }, [reminder]);
+  if (options.alarms) {
+    coordinator.adoptAlarms({ saveAll: vi.fn(async () => undefined) }, options.alarms);
+  }
   vi.advanceTimersByTime(1000);
   coordinator.update(0);
   return { coordinator, host, play };
@@ -63,6 +77,53 @@ describe('reminder entrance gating', () => {
     expect(coordinator.isPerforming).toBe(false);
     expect(play).not.toHaveBeenCalled();
     expect(coordinator.getBubbleText()).toBeNull();
+    coordinator.stop();
+  });
+});
+
+describe('alarms alongside reminders', () => {
+  it('shows the alarm first when both come due together', () => {
+    const { coordinator, host } = setup({ alarms: [alarmAt(1000)] });
+
+    // Both were due at the same tick; the alarm outranks the reminder, so it is
+    // the one the companion is sent out for.
+    expect(host.prepareForReminder).toHaveBeenCalledOnce();
+    expect(host.prepareForReminder.mock.calls[0]?.[0]).toMatchObject({
+      key: 'alarm:standup',
+      entrance: 'from-edge',
+    });
+    coordinator.stop();
+  });
+
+  it('still rings while reminders are paused', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const player = new AnimationPlayer(
+      new Map([['idle', { name: 'idle', fps: 6, loop: true, frames: ['idle.png'] }]]),
+    );
+    const host = {
+      player,
+      isBusy: vi.fn(() => false),
+      prepareForReminder: vi.fn(),
+      isReadyForReminder: vi.fn(() => true),
+      finishReminder: vi.fn(),
+    };
+    const sound = new SoundPlayer();
+    vi.spyOn(sound, 'play').mockImplementation(() => undefined);
+    const coordinator = new ReminderCoordinator(host, sound);
+
+    coordinator.setPaused(true);
+    coordinator.adopt({ saveAll: vi.fn(async () => undefined) }, [reminder]);
+    coordinator.adoptAlarms({ saveAll: vi.fn(async () => undefined) }, [alarmAt(1000)]);
+
+    vi.advanceTimersByTime(1000);
+    coordinator.update(0);
+
+    // Pausing is about the companion interrupting on its own. An alarm is a
+    // moment the user chose, and its schedule has already moved past this
+    // occurrence — suppressing it would lose it for good.
+    expect(host.prepareForReminder).toHaveBeenCalledOnce();
+    expect(host.prepareForReminder.mock.calls[0]?.[0]).toMatchObject({ key: 'alarm:standup' });
     coordinator.stop();
   });
 });

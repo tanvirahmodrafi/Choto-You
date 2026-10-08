@@ -208,6 +208,31 @@ describe('MovementEngine', () => {
     expect(listener).toHaveBeenCalled();
   });
 
+  it('ends a fall that started on the floor, rather than falling for ever', () => {
+    // Crossing to the display above arrives standing on its floor, so the fall
+    // has no airborne frame to land from. Left in 'falling' the companion is
+    // never idle again: wandering, roaming and the position store all skip it.
+    const { engine, boundaries } = makeEngine(bounds, 500);
+    engine.setPosition({ x: 500, y: boundaries.groundY }, 'falling');
+    expect(engine.getSnapshot().mode).toBe('falling');
+
+    engine.update(1 / 60);
+
+    expect(engine.getSnapshot().mode).toBe('idle');
+    expect(engine.getSnapshot().grounded).toBe(true);
+  });
+
+  it('announces the end of such a fall even though the position never changed', () => {
+    const { engine, boundaries } = makeEngine(bounds, 500);
+    engine.setPosition({ x: 500, y: boundaries.groundY }, 'falling');
+    const listener = vi.fn();
+    engine.subscribe(listener);
+
+    engine.update(1 / 60);
+
+    expect(listener).toHaveBeenCalled();
+  });
+
   it('does not notify when nothing moved', () => {
     const { engine } = makeEngine(bounds, 500);
     const listener = vi.fn();

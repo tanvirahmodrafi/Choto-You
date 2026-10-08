@@ -28,9 +28,9 @@ npm run typecheck           # tsc --noEmit, strict
 npm run build               # typecheck + frontend bundle
 npm run tauri:build         # installable bundle
 cargo fmt --check --manifest-path src-tauri/Cargo.toml
-npm run assets:character    # regenerate avatar PNG frames from tools/character-art.mjs
-npm run assets:icon         # regenerate the app icon set
-npm run assets:tray         # regenerate the tray silhouette
+npm run assets:character    # rebuild the bundled avatar from art/avatar-sheet.png
+npm run assets:icon         # rebuild the app icon set from art/app-icon.png
+npm run assets:tray         # rebuild the tray silhouette from the bundled avatar
 npm run assets:sample-sheet # samples/sample-avatar-sheet.png, for testing sheet import
 ```
 
@@ -71,6 +71,10 @@ creates it once and retries startup up to three times. Subsystems:
   decides *what happens*, `ReminderCoordinator` joins them, `ReminderVisit`
   handles the reminders-only peek-and-deliver sequence, `AvatarHandover` the
   free-roam exchange when a reminder belongs to a different avatar.
+- `alarms/` — clock alarms: `AlarmScheduler` plus the model. Scheduled by time
+  of day, with an optional warning minutes beforehand; delivered through the
+  reminder coordinator as an `Announcement`, which is the one shape both kinds
+  reduce to.
 - `characters/` — pack loading and validation, `AvatarRegistry`, sprite-sheet
   slicing (`avatarSheet.ts`, `sliceSheet.ts`), stills import (`stills.ts`),
   the generated model prompt (`avatarPrompt.ts`).
@@ -129,6 +133,13 @@ validated field by field and clamped — `mergeSettings` is the pattern. One bad
 value must cost its own default, not the whole object; a scale of 500 makes the
 app unrecoverable through its own UI.
 
+**Two schedules, one queue.** Interval reminders and clock alarms are
+scheduled by completely different rules and meet as `Announcement`s in
+`ReminderCoordinator`, which holds the only queue. Two queues would let them
+race for the companion; one lets an alarm outrank a reminder. Alarms are exempt
+from the reminder pause and are dropped rather than announced when more than
+`ALARM_STALE_MS` late — both deliberate, both documented in the README.
+
 **SQL stays in `src/database/`.** Everything else works with typed objects.
 Settings are JSON in a key/value table on purpose, so new toggles need no
 migration. Position is written only after a few seconds of stillness, plus once
@@ -146,6 +157,15 @@ companion the user has no reason to suspect.
 
 **Frame-rate independence.** Anything periodic (roam checks, probability rolls,
 movement) is time-based, not per-frame, so behaviour matches on 60 Hz and 120 Hz.
+
+**Sheet geometry is a contract.** `CELL_LAYOUT` in `characters/avatarSheet.ts`
+fixes how big the character is drawn inside its cell (75% of the cell height,
+feet on a baseline at 88%, 10% margins) and the generated prompt quotes those
+numbers. They are fractions, not pixels: models ignore the requested canvas
+size, so returned sheets arrive at arbitrary resolutions. A figure drawn taller
+than its cell overflows into the row below and the slicer's cut goes through its
+feet, which cannot be recovered — row boundaries are therefore found per column,
+so one overflowing drawing does not cost the whole row its shoes.
 
 **Avatar packs are declarative.** `character.json` + images, no executable code,
 `schemaVersion` validated on load. Imported packs go to `avatars/<id>/` under the

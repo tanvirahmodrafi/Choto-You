@@ -1,5 +1,7 @@
 import {
+  CELL_LAYOUT,
   CHROMA_KEY,
+  DRAG_SEQUENCE,
   SHEET_COLUMNS,
   SHEET_HEIGHT,
   SHEET_PLAN,
@@ -14,9 +16,10 @@ import {
  * in the prompt and the one the slicer expects can never disagree — which would
  * silently produce an avatar whose walk frames were its waving frames.
  *
- * The constraints here are the ones that actually decide whether the result is
- * usable: a fixed grid, a constant baseline, and the same character throughout.
- * Everything else is style.
+ * Every rule here is one that was observed failing. Each is stated once, in the
+ * section it belongs to: a prompt that says the same thing four times in four
+ * places reads as emphasis to a person and as noise to a model, and it buries
+ * the measurements that actually decide whether the sheet can be cut up.
  */
 export interface PromptOptions {
   /** What the user wants the avatar called, used to address the character. */
@@ -26,69 +29,96 @@ export interface PromptOptions {
 }
 
 export function buildAvatarPrompt(options: PromptOptions = {}): string {
-  const who = options.name?.trim() ? `the person in the photo ("${options.name.trim()}")` : 'the person in the photo';
+  const who = options.name?.trim()
+    ? `the person in the attached photo ("${options.name.trim()}")`
+    : 'the person in the attached photo';
   const cellWidth = Math.round(SHEET_WIDTH / SHEET_COLUMNS);
   const cellHeight = Math.round(SHEET_HEIGHT / SHEET_ROWS);
 
+  // Every measurement is given as a percentage and as pixels. The percentage is
+  // the rule — it still holds when the model returns a different canvas size,
+  // which is the usual outcome — and the pixels make it concrete.
+  const percent = (fraction: number): string => `${Math.round(fraction * 100)}%`;
+  const down = (fraction: number): number => Math.round(cellHeight * fraction);
+  const across = (fraction: number): number => Math.round(cellWidth * fraction);
+
+  const poseRow = SHEET_PLAN.findIndex((row) => row.kind === 'poses');
+  const poses = SHEET_PLAN[poseRow];
+  const dragCells =
+    poses?.kind === 'poses'
+      ? DRAG_SEQUENCE.map((slot) => poses.cells.findIndex((cell) => cell.slot === slot) + 1)
+      : [];
+
   const rows = SHEET_PLAN.map((row, index) => {
-    const number = index + 1;
-    if (row.kind === 'sequence') {
-      const cells = row.cells
-        .map((cell, cellIndex) => `   - Cell ${cellIndex + 1}: ${cell}`)
-        .join('\n');
-      return `Row ${number} — ${row.label} (these ${row.cells.length} cells play as a loop, so they must flow into each other):\n${cells}`;
-    }
-    const cells = row.cells
-      .map((cell, cellIndex) => `   - Cell ${cellIndex + 1}: ${cell.description}`)
-      .join('\n');
-    return `Row ${number} — ${row.label} (${row.cells.length} unrelated poses):\n${cells}`;
+    const cells =
+      row.kind === 'sequence'
+        ? row.cells.map((cell, position) => `   ${position + 1}. ${cell}`)
+        : row.cells.map((cell, position) => {
+            // The three pick-up moments are marked where they are drawn as
+            // well as named above, because they are not next to each other and
+            // a model reading the list alone would treat them as unrelated.
+            const moment = DRAG_SEQUENCE.indexOf(cell.slot);
+            const tag =
+              moment >= 0 ? ` [moment ${moment + 1} of 3 of the pick-up sequence]` : '';
+            return `   ${position + 1}. ${cell.description}${tag}`;
+          });
+    const kind =
+      row.kind === 'sequence'
+        ? `${row.cells.length} frames of one loop, in order`
+        : `${row.cells.length} separate poses, each held on its own`;
+    return `Row ${index + 1} — ${row.label} (${kind}):\n${cells.join('\n')}`;
   }).join('\n\n');
 
-  return `I am making a small desktop companion character from the attached photo. Please generate ONE image: a sprite sheet of that person as a cute, simplified cartoon mascot.
+  return `I am making a small desktop companion character. Please turn the attached photo into ONE image: a sprite sheet of that person as a cute cartoon mascot.
 
-OUTPUT FORMAT — this matters more than anything else:
-- A single high-resolution PNG, exactly ${SHEET_WIDTH}x${SHEET_HEIGHT} pixels. Do not return a smaller preview.
-- Laid out as an exact ${SHEET_COLUMNS}x${SHEET_ROWS} grid: ${SHEET_COLUMNS} columns, ${SHEET_ROWS} rows, ${SHEET_COLUMNS * SHEET_ROWS} cells of ${cellWidth}x${cellHeight} pixels each.
-- Transparent background. If you cannot produce transparency, fill the background with flat ${CHROMA_KEY} green and nothing else.
-- Do NOT draw a grey-and-white checkerboard. A checkerboard is how an editor *displays* transparency; drawing one produces a picture of a checkerboard, which is not transparent.
-- Do NOT draw grid lines, borders, frames, labels, numbers, captions, watermarks, drop shadows or any ground/floor.
-- Leave a clear gap between rows. No part of a character may touch or cross into the cell above or below it.
+THE PHOTO IS OF A REAL PERSON — the whole point is that the result looks like them:
+- Build the face from the photo: the shape of the face and jaw, the nose, the shape and spacing of the eyes, the eyebrows, the mouth, the ears, the skin tone.
+- Keep the hair exactly — length, style, parting, colour, texture — and keep glasses, facial hair, a mole, a piercing, anything distinctive.
+- Keep their apparent age, their gender presentation, their ethnicity and their build. Do not slim them, lighten their skin, straighten their hair, remove their glasses or otherwise "improve" them.
+- Simplify the STYLE, never the identity. Someone who knows ${who} should recognise them in a 64-pixel icon, which only happens if the structure of the face is right — hair and clothes alone are not enough.
+- Keep the same face, hair, outfit and colours in all ${SHEET_COLUMNS * SHEET_ROWS} cells. Only the pose changes.
 
-THE CHARACTER:
-- A small, friendly, polished chibi-style cartoon version of ${who}: big head, small body, roughly 3 heads tall, smooth clean outlines, detailed facial features, and refined cel shading.
-- Render crisp high-resolution edges and preserve recognisable facial and clothing details. Do not use pixel art, intentional blur, heavy texture, or compression artifacts.
-- Keep them recognisable — hairstyle, hair colour, skin tone, facial hair, glasses, and clothing should match the photo. Keep the same outfit in every single cell.
-- Full body in every cell, head to feet, nothing cropped.
-- The character faces to the RIGHT in every cell: a three-quarter view towards the right for the standing, greeting and single-pose cells, and a near-side view for the run row (row 2) so both legs and both arms are visible and read apart.
-- Both arms and both legs are drawn in every cell. Shade the limbs on the far side of the body slightly darker than the near ones so the two sides can be told apart.
+STYLE:
+- A friendly chibi mascot: big head, small body, roughly 3 heads tall, clean smooth outlines, soft cel shading, crisp high-resolution edges. Not pixel art, not blurry, not heavily textured.
+- Facing RIGHT in every cell — a three-quarter view towards the right, except the run row, which is a near-side view so both legs read clearly.
+- Both arms and both legs visible in every cell, with the limbs on the far side of the body shaded slightly darker so the two sides can be told apart.
 
-ROW 2 IS A RUN CYCLE — this is the part that is most often got wrong:
-- Draw it as a RUN, not a walk and not a tiptoe sneak: a strong forward lean of the whole torso, knees lifted high in front, the trailing heel kicked up towards the backside, elbows bent to about a right angle and driving hard, hands loosely closed.
-- A run has an airborne phase. In cells 4 and 8 BOTH feet are off the ground at once and the body is at its highest. If every cell has a foot on the ground, the row is a walk and it is wrong.
-- The eight cells are one complete two-step cycle of four phases each. Cells 1-4 are the step on the RIGHT leg; cells 5-8 are those same four drawings with the arms and legs swapped so the LEFT leg takes the step, facing the same direction as before. Over the loop each leg leads exactly once.
-- The four phases, in order: CONTACT (the leading foot strikes the ground in front, the other leg stretched far behind), DOWN (lowest point, the supporting knee deeply bent taking the weight, the free leg swinging through with the heel tucked up near the backside), PASSING (the supporting leg straightening to push off while the free knee drives forward past it, body rising), UP (airborne, legs scissored wide apart, front knee high, rear leg extended back).
-- Never draw the same leg forward in two neighbouring cells, and never repeat one pose eight times with only the arms or the expression changed. If cells 1 and 5 look alike, the row is wrong.
-- Keep the two legs clearly separate in every cell — a visible gap between them, or one leg swinging past the other with the knee bent. Do not hide the far leg behind the near one.
-- The character runs on the spot. Its body stays in the same place in every cell; do not move it across the row.
+OUTPUT FORMAT:
+- A single PNG, exactly ${SHEET_WIDTH}x${SHEET_HEIGHT} pixels. Do not return a smaller preview.
+- An exact ${SHEET_COLUMNS}x${SHEET_ROWS} grid: ${SHEET_COLUMNS} columns, ${SHEET_ROWS} rows, ${SHEET_COLUMNS * SHEET_ROWS} cells of ${cellWidth}x${cellHeight} pixels each.
+- Transparent background. If you cannot do transparency, fill it with flat ${CHROMA_KEY} green and nothing else. Do NOT draw a grey-and-white checkerboard: that is how an editor *shows* transparency, and drawing one produces a picture of a checkerboard.
+- Nothing in the image but the character: no grid lines, borders, frames, labels, numbers, captions, watermarks, drop shadows, ground, floor, scenery, props beyond those named below, speech bubbles or motion trails.
 
-REMINDER BEHAVIOUR — design the poses for this performance:
-- The character is invisible between reminders. When one is due, they cautiously peek around a side edge of the display, with a raised hand posed as if holding that edge, then hurry out to the centre, deliver the message, and run away.
-- Row 3 supplies the edge peek and greeting: use a curious expression and a raised near hand with gently curled fingers, suitable for gripping an imaginary vertical edge, opening into a friendly wave. The app adds the lean and clips the body at the display edge.
-- Row 2 supplies the entrance AND the escape, and is the character's ordinary travelling animation everywhere else. It must read as a jog at normal speed and a sprint when played faster, so draw a real run, as described above. Keep all eight frames as one continuous cycle; do not split the row into separate actions.
-- Row 1 is the calm, attentive pose used while standing at the centre. Keep the expression friendly and ready to speak.
-- The app moves and mirrors the character, reveals them from behind the edge, and draws the message. Draw only the complete character in each cell: no screen, wall, door, physical edge, speech bubble, message text, motion trails, or scenery. Do not crop the peeking poses or draw the character travelling across the sheet.
-- Preserve the exact cell order below. These are animation frames, not a storyboard of the whole reminder.
+SIZE AND POSITION INSIDE EACH CELL — the most common way this goes wrong, so please measure it:
+- DRAW THE CHARACTER SMALL INSIDE ITS CELL. Head to heel is ${percent(CELL_LAYOUT.characterHeight)} of the cell's height — about ${down(CELL_LAYOUT.characterHeight)}px of a ${cellHeight}px cell — and never more than ${percent(CELL_LAYOUT.maxCharacterHeight)}, measured from the top of the hair to the sole of the lowest foot.
+- The soles of planted feet rest on one horizontal line ${percent(CELL_LAYOUT.baseline)} of the way down the cell, about ${down(CELL_LAYOUT.baseline)}px from its top edge, leaving ${down(1 - CELL_LAYOUT.baseline)}px below. The same line in every cell of the sheet.
+- The widest pose — arms out, legs scissored mid-stride — is at most ${percent(CELL_LAYOUT.maxCharacterWidth)} of the cell's width, about ${across(CELL_LAYOUT.maxCharacterWidth)}px of ${cellWidth}px.
+- Keep at least ${percent(CELL_LAYOUT.margin)} of the cell — about ${across(CELL_LAYOUT.margin)}px — completely empty on all four sides. Nothing may touch or cross a cell edge: not hair, not a raised hand, not a trailing foot.
+- Those margins are not decoration. The app cuts the sheet apart along the cell edges, so anything crossing one is destroyed. In practice that means the feet: a figure drawn too tall overflows the bottom of its cell and its shoes are either sliced off or collide with the head of the row below.
+- Pick ONE size that satisfies this for the tallest pose (arms raised) and the widest pose (mid-stride), then draw all ${SHEET_COLUMNS * SHEET_ROWS} cells at that size. Never zoom in or out between cells. The calm standing cells will sit in noticeably more empty space — that is correct, do NOT enlarge them to fill the cell.
 
-CONSISTENCY ACROSS CELLS — the character is animated by flipping between these cells, so:
-- Exactly the same character, outfit, colours and drawing style in all ${SHEET_COLUMNS * SHEET_ROWS} cells.
-- Exactly the same size in every cell. Do not zoom in or out between cells.
-- Only the pose changes between cells. Nothing else.
+REGISTRATION — rows 1 to 3 are played as loops, so drift here becomes the character visibly sliding sideways on screen and snapping back:
+- Put the centre of the head on the cell's exact vertical centre line, in every cell. The arms and legs swing around it; the head and torso do not travel.
+- Imagine the same cross in every cell before you start — that centre line, and the baseline ${percent(CELL_LAYOUT.baseline)} of the way down — and hang the character on it each time. Do not re-compose or re-centre a pose to make it look better on its own: these cells are only ever seen one after another, never side by side.
+- Planted feet touch the baseline exactly. Feet may rise above it for a stride, a jump or a fall. Nothing ever goes below it.
 
-REGISTRATION — where the character sits inside its cell. Rows 1, 2 and 3 are played as loops, so any drift here becomes the character visibly sliding sideways on screen and snapping back:
-- Put the centre of the head on the exact centre line of the cell, in EVERY cell of the sheet. Same spot, cell after cell. The arms and legs swing around it; the head and torso do not travel.
-- Imagine the same cross drawn in the middle of every cell before you start, and hang the character on it each time. Do not re-compose, re-centre or re-frame a pose to make it look better on its own — the cells are only ever seen one after another, never side by side.
-- Use the SAME horizontal baseline in every cell, near the bottom. Planted feet touch that line; lifted feet may rise for a stride, jump or fall without shifting the character's framing.
-- Leave a clear margin on all four sides of every cell: nothing may touch or cross a cell edge, not even at the widest point of a stride or the tips of outstretched arms. Choose the character's size so that the WIDEST cell still fits with room to spare. The calmer cells will then sit in more empty space, which is correct and expected — do not enlarge them to fill it.
+ROW 2 IS A RUN CYCLE — the part most often got wrong:
+- A real RUN, not a walk and not a tiptoe sneak: strong forward lean, knees lifted high in front, the trailing heel kicked up towards the backside, elbows bent to about a right angle and driving hard, hands loosely closed.
+- A run has an airborne phase. In cells 4 and 8 BOTH feet are off the ground and the body is at its highest. If every cell has a foot down, it is a walk and it is wrong.
+- Cells 5 to 8 are cells 1 to 4 with the arms and legs swapped — NOT mirrored. The character still faces right. Over the loop each leg leads exactly once, and the same leg never leads in two neighbouring cells. If cells 1 and 5 look alike, the row is wrong.
+- Keep the legs clearly separate in every cell: a visible gap, or one swinging past the other with the knee bent. Never hide the far leg behind the near one.
+- The character runs on the spot. Do not move it across the row.
+
+WHAT THE ROWS ARE FOR — this is how the app uses them, so draw for it:
+- Row 1 is the calm standing loop, used while the character is idle and while it speaks.
+- Row 2 carries it everywhere: it must read as a jog at normal speed and a sprint when played faster. One continuous cycle; do not split the row into separate actions.
+- Row 3 is the entrance. The character peeks around the side edge of the display, holding that edge, then opens into a greeting. Draw the full body and no edge of any kind — the app clips it against the screen edge itself. One continuous loop.
+- Row 4 is eight separate poses.${
+    dragCells.length === 3
+      ? `\n- In row 4, cells ${dragCells[0]}, ${dragCells[1]} and ${dragCells[2]} are three moments of ONE event, in that order: the user picks the character up by hand, lets go of it, and it lands. Draw them as a sequence that belongs together — the same startled face carried through from being lifted, into the drop, into bracing against the floor.`
+      : ''
+  }
+- The other five poses in row 4 are reactions the character performs on the spot. Keep them one family rather than five unrelated drawings: the same framing and the same level of exaggeration throughout, reading as one person in five moods — cheerful in the hop and the delighted pose, the same face startled, then calm for drinking and for dozing off.
 
 THE CELLS, left to right, top to bottom:
 

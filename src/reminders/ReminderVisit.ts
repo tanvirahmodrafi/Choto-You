@@ -2,6 +2,17 @@ import type { Rect, Vector2 } from '@/movement/types';
 
 export type VisitStage = 'hidden' | 'peek' | 'enter' | 'present' | 'exit' | 'hide';
 
+/**
+ * How far in from the edge the character stands to speak, in physical pixels.
+ *
+ * It delivers from the corner it arrived at rather than from the middle of the
+ * display: the middle is where the user's work is, and a character that walks
+ * into it to talk has to be got out of the way. A small inset only, so the
+ * whole body clears the edge it was hiding behind — the walk the user sees is
+ * mostly the reveal from behind that edge.
+ */
+const CORNER_INSET = 18;
+
 /** A reminder's entrance and escape, independent of frame rate and OS windows. */
 export class ReminderVisit {
   stage: VisitStage = 'hidden';
@@ -27,7 +38,9 @@ export class ReminderVisit {
 
   update(delta: number): void {
     this.elapsed += Math.max(0, delta);
-    const durations = { peek: 1.6, enter: 2, exit: 0.9, hide: 0.35 };
+    // `enter` is shorter than it was when the walk crossed half the display;
+    // from the edge to the corner is a few pixels and a reveal.
+    const durations = { peek: 1.6, enter: 1.1, exit: 0.9, hide: 0.35 };
     const next = { peek: 'enter', enter: 'present', exit: 'hide', hide: 'hidden' } as const;
     while (this.stage !== 'hidden' && this.stage !== 'present') {
       const duration = durations[this.stage];
@@ -43,7 +56,7 @@ export class ReminderVisit {
       // Slowly reveal the head and near hand, pause, then emerge.
       return sign * (1 - 0.48 * Math.min(1, this.elapsed / 0.65));
     }
-    if (this.stage === 'enter') return sign * 0.52 * Math.max(0, 1 - this.elapsed / 0.3);
+    if (this.stage === 'enter') return sign * 0.52 * Math.max(0, 1 - this.elapsed / 0.45);
     if (this.stage === 'hide') return sign * Math.min(1, this.elapsed / 0.35);
     return 0;
   }
@@ -51,15 +64,16 @@ export class ReminderVisit {
   position(bounds: Rect, size: { width: number; height: number }): Vector2 {
     const left = bounds.x;
     const right = Math.max(left, bounds.x + bounds.width - size.width);
-    const centre = (left + right) / 2;
     const edge = this.side === 'left' ? left : right;
+    const inset = Math.min(CORNER_INSET, Math.max(0, (right - left) / 2));
+    const corner = this.side === 'left' ? left + inset : right - inset;
     let x = edge;
-    if (this.stage === 'present') x = centre;
+    if (this.stage === 'present') x = corner;
     if (this.stage === 'enter') {
-      const t = Math.min(1, this.elapsed / 2);
-      x = edge + (centre - edge) * t * t * (3 - 2 * t);
+      const t = Math.min(1, this.elapsed / 1.1);
+      x = edge + (corner - edge) * t * t * (3 - 2 * t);
     }
-    if (this.stage === 'exit') x = centre + (edge - centre) * Math.min(1, this.elapsed / 0.9);
+    if (this.stage === 'exit') x = corner + (edge - corner) * Math.min(1, this.elapsed / 0.9);
     // Stand on the bottom of the work area, the same ground the companion
     // walks on the rest of the time — a reminder that floats in at the
     // vertical centre of the display reads as a popup, not as the character

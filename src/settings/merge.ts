@@ -26,7 +26,7 @@ export function mergeSettings(stored: unknown): Settings {
       companionVisible: bool(general['companionVisible'], d.general.companionVisible),
     },
     character: {
-      characterId: text(character['characterId'], d.character.characterId),
+      characterId: avatarId(character['characterId'], d.character.characterId),
       scale: number(character['scale'], d.character.scale, 0.5, 3),
       speedMultiplier: number(character['speedMultiplier'], d.character.speedMultiplier, 0.25, 4),
       animationSpeed: number(character['animationSpeed'], d.character.animationSpeed, 0.25, 4),
@@ -76,6 +76,23 @@ function bool(value: unknown, fallback: boolean): boolean {
 
 function text(value: unknown, fallback: string): string {
   return typeof value === 'string' && value.length > 0 ? value : fallback;
+}
+
+/**
+ * Bundled packs that no longer ship.
+ *
+ * An install from before the bundled avatars were replaced still names one of
+ * these. The loader would fall back to the default on its own, but the settings
+ * window would then show an avatar picker with nothing selected, and the user
+ * would have no way to tell which character they are actually looking at. The
+ * id is corrected here instead, at the one place where everything stored is
+ * already being checked.
+ */
+const RETIRED_AVATARS: readonly string[] = ['pip', 'mochi', 'nimbus', 'ember'];
+
+function avatarId(value: unknown, fallback: string): string {
+  const id = text(value, fallback);
+  return RETIRED_AVATARS.includes(id) ? fallback : id;
 }
 
 /** Numbers are clamped as well as type-checked, so a bad value cannot make the companion unusable. */

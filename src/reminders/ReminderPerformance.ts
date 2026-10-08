@@ -1,7 +1,7 @@
 import type { AnimationPlayer } from '@/animation/AnimationPlayer';
 import { AnimationPriority } from '@/animation/types';
 import { createLogger } from '@/utils/logger';
-import type { Reminder } from './types';
+import type { Announcement } from './types';
 
 const log = createLogger('REMINDER');
 
@@ -25,10 +25,14 @@ export interface PerformanceCallbacks {
 }
 
 /**
- * Plays out a single reminder: greet, speak, react, then go back to normal.
+ * Plays out one announcement: greet, speak, react, then go back to normal.
+ *
+ * Works on an `Announcement` rather than on a reminder, so an interval
+ * reminder and a clock alarm are performed by exactly the same code — the only
+ * difference between them is in what decided they were due.
  *
  * Driven by `update(delta)` from the shared ticker rather than owning timers,
- * so a reminder cannot keep running after the companion is disposed and the
+ * so a performance cannot keep running after the companion is disposed and the
  * whole sequence is deterministic under test.
  */
 export class ReminderPerformance {
@@ -36,7 +40,7 @@ export class ReminderPerformance {
   private elapsed = 0;
 
   constructor(
-    readonly reminder: Reminder,
+    readonly reminder: Announcement,
     private readonly player: AnimationPlayer,
     private readonly callbacks: PerformanceCallbacks,
   ) {

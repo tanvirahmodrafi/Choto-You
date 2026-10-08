@@ -34,7 +34,7 @@ Three modes, under Settings → Behavior:
 | Mode | What it does |
 | --- | --- |
 | Roam freely | Wanders the screen on its own. |
-| Only when reminding me | Stays hidden, peeks around a side edge, comes to the display centre to deliver a reminder, then runs away. |
+| Only when reminding me | Stays hidden, peeks around a side edge, steps into that corner to deliver a reminder, then runs away. |
 | Stay put | Never moves by itself. You can still drag it anywhere. |
 
 Reminder-only appearances pause at the edge before entering. The message and
@@ -184,8 +184,9 @@ Requires Node 20+ and a stable Rust toolchain (`rustup`).
 | `npm run tauri:build` | Builds the installable bundle |
 | `npm test` | Runs the unit tests |
 | `npm run typecheck` | Strict TypeScript check, no emit |
-| `npm run assets:character` | Regenerates the placeholder character's PNG frames |
-| `npm run assets:icon` | Regenerates the application icon set |
+| `npm run assets:character` | Rebuilds the bundled avatar from `art/avatar-sheet.png` |
+| `npm run assets:icon` | Rebuilds the application icon set from `art/app-icon.png` |
+| `npm run assets:tray` | Rebuilds the menu bar silhouette from the bundled avatar |
 
 ## Layout
 
@@ -211,8 +212,9 @@ src-tauri/src/
   displays/    monitor enumeration                    (Phase 4)
   platform/    all macOS/Windows-specific code
 
-public/characters/pip/   the bundled placeholder character pack
-tools/                   procedural asset generators
+art/                     the source artwork the bundled assets are built from
+public/characters/rafi/  the bundled avatar pack, built from that artwork
+tools/                   asset builders and generators
 ```
 
 Directories for later phases exist but are empty or hold only a documented
@@ -243,11 +245,27 @@ last.
 
 ## Avatars
 
-Four avatars ship with the app — **Pip**, **Mochi**, **Nimbus** and **Ember**.
-All four are the same original character in different palettes, drawn
-procedurally from signed distance fields in `tools/character-art.mjs` and
-rasterised to transparent PNG frames by `npm run assets:character`. No
-third-party or copyrighted artwork is bundled.
+One avatar ships with the app — **Choto Rafi** — built by `npm run assets:character`
+from `art/avatar-sheet.png`, the original artwork committed alongside it. The
+app icon and the menu bar silhouette come from the same character, so what is
+in the Dock, in the menu bar and on the desktop is recognisably one person.
+
+The sheet is in exactly the layout `SHEET_PLAN` asks an image model for, which
+is the same layout the in-app importer slices — the bundled avatar is built the
+way any imported one is, rather than by a separate path that could drift.
+
+Turning drawings composed cell by cell into frames that can be *animated* is
+most of the work, and `tools/build-avatar-pack.mjs` does it: each drawing is
+found by its own artwork rather than by an assumed grid, scaled by the width of
+its head — the one measurement a pose cannot change — and placed on a shared
+baseline and centre line. A sprite whose size or position wanders between cells
+makes the character swell and slide on screen, which reads as a bug rather than
+as a character.
+
+The run cycle is the exception to the shared baseline: it is registered by the
+head instead. Both feet leave the ground in the airborne frames, so putting
+each frame's lowest pixel on the floor would push the character *down* exactly
+where it should be rising.
 
 Avatar packs are declarative: a `character.json` manifest plus image assets,
 with no executable code. The manifest is versioned (`schemaVersion`) and fully
@@ -261,12 +279,25 @@ have the pose, its current animation frame.
 ```
 public/characters/
   index.json          ← what the picker lists; a webview cannot list a directory
-  pip/
+  rafi/
     character.json
     thumbnail.png
     idle/001.png … 008.png
     walk/001.png … 008.png
+    wave/001.png … 008.png
+    jump/001.png, fall/001.png, land/001.png, …
 ```
+
+Slots the sheet has no drawing for are pointed at one that fits rather than
+left out — `wake` reuses the sleeping pose — because the runtime asks for all
+twelve and a missing one would be filled with a blank stare at the moment the
+character wakes up.
+
+A pose that the runtime waits on must be able to *end*. A looping single-frame
+clip never completes, so it never releases the priority it was played at: one
+click and the character would wear its delighted face for the rest of the
+session, because ordinary walking ranks below a reaction. The builder marks
+those slots one-shot and holds them for half a second.
 
 ### Making one from a photo
 
@@ -289,10 +320,28 @@ consistent between frames. Three rows are real animations:
 
 | Row | Becomes | Frames |
 | --- | --- | --- |
-| 1 | `idle` | 8 — smoother breathing, with a blink |
-| 2 | `walk` | 8 — a smoother full stride, so legs and arms swing |
-| 3 | `wave` | 8 — arm raising, waving, and lowering |
+| 1 | `idle` | 8 — breathing, with a blink |
+| 2 | `walk` | 8 — a full run cycle, so legs and arms swing |
+| 3 | `wave` | 8 — the edge peek opening into a greeting |
 | 4 | `jump`, `fall`, `land`, `happy`, `surprised`, `drink`, `dragged`, `sleep` | 1 each |
+
+Three of row 4 are one event rather than three unrelated poses: `dragged` is
+the character held up in the user's hand, `fall` is the moment it is let go,
+and `land` is the shock-absorbing crouch. The prompt names them by cell number
+and marks them in the list, so the same startled expression carries through all
+three.
+
+That row's cell **order is a wire format**, not a preference: it is how cells
+are matched to animation slots, so moving one silently re-labels every sheet
+anyone has already generated — a jump would import as the pose for being picked
+up. Reword a cell freely; do not move one. (It is why the three pick-up moments
+are not adjacent, and are cross-referenced by number instead.)
+
+The prompt also has to say, in as many words, that the attached image is a
+photograph of a real person whose face must be reproduced — its shape, jaw,
+nose, eyes, eyebrows, mouth, skin tone — and that the *style* is what gets
+simplified, never the identity. Without that, models return a plausible cartoon
+of somebody else: a mascot, rather than your mother.
 
 The remaining slots borrow along the fallback chains. A borrowed clip is
 re-timed for where it lands: a looping walk copied into `land` is made to
@@ -304,6 +353,34 @@ transparent margins — but it destroys the alignment between frames, and a walk
 cycle whose frames are each centred on their own bounding box jitters badly.
 The prompt instead demands a constant baseline, which is what the pack's anchor
 assumes.
+
+#### How big the character has to be drawn
+
+The prompt states this in numbers because a model told only to "leave a margin"
+fills the frame instead: head to heel is **75%** of the cell's height (never
+more than 80%), planted feet sit on a line **88%** of the way down it, the
+widest pose is at most **80%** of the cell's width, and **10%** of every side
+stays empty. `CELL_LAYOUT` in `src/characters/avatarSheet.ts` holds those
+figures, and the prompt quotes them as both percentages and pixels.
+
+They are fractions rather than pixels because the canvas size the prompt asks
+for is the one thing models reliably ignore — returned sheets come back at
+whatever resolution the model works at, and a rule stated in pixels stops
+applying the moment it does.
+
+The failure they prevent is not subtle. Measured on returned sheets, characters
+were drawn at 105–120% of their cell height: every row overflowed into the one
+below, the least-damaging cut ran through the shoes, and on one sheet the bottom
+row's feet ran off the edge of the image with no margin at all. A cut-off foot
+cannot be recovered afterwards, because those pixels were never drawn.
+
+So the row boundaries are searched for **per column**, not once across the
+sheet. Whether a figure overflows is a property of that one drawing: on the
+sheet the bundled avatar is built from, four of eight columns had a clean gap at
+the third boundary and four did not. One cut across the sheet took the soles off
+all four; found per column, seven of the eight keep their feet and the last
+loses 11 pixels. `npm run assets:character` prints what each cut went through,
+so a sheet that needs redrawing says so.
 
 Image models are unreliable about transparency, so the prompt asks for a flat
 chroma green (`#00B140`) as a fallback and the importer keys it out. The
@@ -389,6 +466,14 @@ The overlay window is normally exactly the character, so it intercepts as
 little of the desktop as possible. A speech bubble does not fit in 96x96, so
 while one is shown the window grows and the character moves to a corner of it.
 
+The bubble is a white rectangle joined to the character by three dots stepping
+down to its head, the way a thought balloon connects to whoever is thinking.
+White in both colour schemes, because it sits on whatever the user's desktop
+happens to be rather than on one of the app's own surfaces, and white with dark
+text is the one combination that reads on both. The dots hang below the box in
+CSS and are not part of its measured height, so the layout's `gap` has to clear
+them or the lowest one is drawn over the character's hair.
+
 `OverlayLayout` is the only module that knows the window is sometimes bigger
 than the character. Movement, boundaries and interaction all continue to work
 in *character* coordinates, which keeps that complication out of them. The
@@ -411,6 +496,58 @@ with a priority and an expiry. That is what stops a reminder interrupting a
 drag or a monitor crossing, stops twenty minutes of missed reminders arriving
 at once (same key replaces, rather than stacks), and stops a stale one
 appearing long after it mattered.
+
+## Alarms
+
+Reminders repeat on an interval. An alarm happens at a time: "standup at 9:45",
+"take the tablet at ten". They are separate tabs in settings and separate
+tables in the database, because almost nothing about them is shared — an alarm
+has a wall-clock time, no interval, and an optional warning before it.
+
+The warning is the part that earns the feature. Being told at 8:00 that the
+meeting is at 8:00 is too late to do anything with, so an alarm can send the
+companion out a few minutes beforehand: *Standup in 5 minutes.* Each alarm
+carries its own warning time, its own message, and its own avatar, so the
+person who tells you about the meeting can be a different character from the
+one who nags you about water.
+
+```
+Alarms                                    Reminders
+at 07:55  →  "Standup in 5 minutes."      every 45 min  →  "Drink some water!"
+at 08:00  →  "Bring the slides."
+```
+
+An alarm is anchored to minutes since local midnight rather than to a
+timestamp, so 08:00 is still 08:00 after the clocks change — the next
+occurrence is built from calendar fields, not by adding 24 hours.
+
+Everything after the moment of being due is shared: both kinds reduce to an
+`Announcement`, and one queue holds both, which is what lets an alarm outrank a
+queued reminder instead of the two racing for the companion.
+
+**Alarms do not obey the reminder pause.** Pausing stops the companion
+interrupting you on its own; an alarm is a moment you asked for, and by the
+time one is queued its own schedule has already moved past that occurrence, so
+suppressing it would lose it rather than defer it. Phone alarms behave the same
+way inside Do Not Disturb.
+
+**A late alarm is not announced.** If the machine slept through 08:00, nobody
+needs telling at 09:15. More than five minutes late and it is skipped with a
+line in the log: a daily alarm moves to tomorrow, and a one-off switches itself
+off, so settings shows plainly that it was missed instead of it going off a day
+late.
+
+Alarms arrive with an entrance even while the companion is free-roaming: it
+runs off the nearest edge, walks back in to that corner, says its piece and
+returns to where it was standing. A reminder, which arrives while the character
+is already wandering about, just speaks from where it is. Neither happens when
+the roam mode is *Stay put* — that setting is a promise that it never moves on
+its own, and an entrance is movement.
+
+Editing either kind in settings now reaches the running companion. The settings
+window writes to the database and broadcasts; the overlay re-reads. Before, an
+edit only took effect at the next launch, which is survivable for a reminder's
+interval and useless for an alarm set for ten minutes' time.
 
 ## Startup recovery
 

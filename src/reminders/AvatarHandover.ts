@@ -42,6 +42,14 @@ const DEPART_SPEED = 1.6;
 const PEEK_SECONDS = 1.1;
 
 /**
+ * How far in from the edge the visitor stands to speak, in physical pixels.
+ *
+ * The same corner a reminder-only visit delivers from, for the same reason:
+ * the middle of the display is where the user's work is.
+ */
+const CORNER_INSET = 18;
+
+/**
  * How long an off-screen stage waits for an avatar before giving up.
  *
  * A pack that fails to load must not leave the companion parked beyond the
@@ -167,7 +175,8 @@ export class AvatarHandover {
     const right = Math.max(left, bounds.x + bounds.width - size.width);
     const edge = this.side === 'left' ? left : right;
     const away = edge + sign * this.width;
-    const centre = Math.round((left + right) / 2);
+    const inset = Math.min(CORNER_INSET, Math.max(0, (right - left) / 2));
+    const corner = Math.round(this.side === 'left' ? left + inset : right - inset);
 
     switch (this.stage) {
       case 'clearing':
@@ -192,11 +201,11 @@ export class AvatarHandover {
       }
 
       case 'arriving':
-        if (this.travel(centre, SNEAK_SPEED, delta)) this.enter('present');
+        if (this.travel(corner, SNEAK_SPEED, delta)) this.enter('present');
         break;
 
       case 'present':
-        this.virtualX = centre;
+        this.virtualX = corner;
         break;
 
       case 'departing':

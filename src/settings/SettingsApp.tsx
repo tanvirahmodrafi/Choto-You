@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
+import {
+  createAlarm,
+  formatTime,
+  LEAD_CHOICES,
+  parseTime,
+  scheduleAlarm,
+  type Alarm,
+} from '@/alarms/types';
+import { AlarmRepository } from '@/database/AlarmRepository';
 import { ReminderRepository } from '@/database/ReminderRepository';
+import { broadcastScheduleChange } from '@/database/scheduleEvents';
 import { DisplayManager } from '@/displays/DisplayManager';
 import type { DisplayInfo } from '@/displays/types';
 import { createCustomReminder, isCustom, type Reminder } from '@/reminders/types';
@@ -13,13 +23,14 @@ import type { RoamMode, Settings } from './types';
 
 const log = createLogger('APP');
 
-type Tab = 'general' | 'character' | 'display' | 'reminders' | 'behavior' | 'advanced';
+type Tab = 'general' | 'character' | 'display' | 'reminders' | 'alarms' | 'behavior' | 'advanced';
 
 const TABS: readonly { readonly id: Tab; readonly label: string }[] = [
   { id: 'general', label: 'General' },
   { id: 'character', label: 'Character' },
   { id: 'display', label: 'Display' },
   { id: 'reminders', label: 'Reminders' },
+  { id: 'alarms', label: 'Alarms' },
   { id: 'behavior', label: 'Behavior' },
   { id: 'advanced', label: 'Advanced' },
 ];
@@ -27,12 +38,14 @@ const TABS: readonly { readonly id: Tab; readonly label: string }[] = [
 interface Loaded {
   readonly store: SettingsStore;
   readonly reminderRepository: ReminderRepository;
+  readonly alarmRepository: AlarmRepository;
 }
 
 export function SettingsApp() {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [reminders, setReminders] = useState<readonly Reminder[]>([]);
+  const [alarms, setAlarms] = useState<readonly Alarm[]>([]);
   const [displays, setDisplays] = useState<readonly DisplayInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('general');
@@ -44,6 +57,8 @@ export function SettingsApp() {
       const store = await SettingsStore.open();
       const reminderRepository = await ReminderRepository.open();
       const loadedReminders = await reminderRepository.loadOrSeed(Date.now());
+      const alarmRepository = await AlarmRepository.open();
+      const loadedAlarms = await alarmRepository.loadAll();
 
       const displayManager = new DisplayManager();
       await displayManager.refresh();
@@ -52,9 +67,10 @@ export function SettingsApp() {
         await store.dispose();
         return;
       }
-      setLoaded({ store, reminderRepository });
+      setLoaded({ store, reminderRepository, alarmRepository });
       setSettings(store.current);
       setReminders(loadedReminders);
+      setAlarms(loadedAlarms);
       setDisplays(displayManager.all);
 
       // The OS is the truth for autostart: the user may have removed the login
@@ -86,28 +102,64 @@ export function SettingsApp() {
     [loaded],
   );
 
+  /**
+   * Writes, then tells the overlay to re-read.
+   *
+   * Without the broadcast an edit here would sit in the database until the next
+   * launch — survivable for a reminder's interval, useless for an alarm the
+   * user has just set for ten minutes' time.
+   */
+  const saved = useCallback(async (write: Promise<void> | undefined): Promise<void> => {
+    await write;
+    await broadcastScheduleChange();
+  }, []);
+
   const updateReminder = useCallback(
     (reminder: Reminder) => {
       setReminders((current) =>
         current.map((candidate) => (candidate.id === reminder.id ? reminder : candidate)),
       );
-      void loaded?.reminderRepository.save(reminder);
+      void saved(loaded?.reminderRepository.save(reminder));
     },
-    [loaded],
+    [loaded, saved],
   );
 
   const addReminder = useCallback(() => {
     const reminder = createCustomReminder(Date.now());
     setReminders((current) => [...current, reminder]);
-    void loaded?.reminderRepository.save(reminder, 100);
-  }, [loaded]);
+    void saved(loaded?.reminderRepository.save(reminder, 100));
+  }, [loaded, saved]);
 
   const removeReminder = useCallback(
     (id: string) => {
       setReminders((current) => current.filter((candidate) => candidate.id !== id));
-      void loaded?.reminderRepository.remove(id);
+      void saved(loaded?.reminderRepository.remove(id));
     },
-    [loaded],
+    [loaded, saved],
+  );
+
+  const updateAlarm = useCallback(
+    (alarm: Alarm) => {
+      setAlarms((current) =>
+        current.map((candidate) => (candidate.id === alarm.id ? alarm : candidate)),
+      );
+      void saved(loaded?.alarmRepository.save(alarm));
+    },
+    [loaded, saved],
+  );
+
+  const addAlarm = useCallback(() => {
+    const alarm = createAlarm(Date.now());
+    setAlarms((current) => [...current, alarm]);
+    void saved(loaded?.alarmRepository.save(alarm, 100));
+  }, [loaded, saved]);
+
+  const removeAlarm = useCallback(
+    (id: string) => {
+      setAlarms((current) => current.filter((candidate) => candidate.id !== id));
+      void saved(loaded?.alarmRepository.remove(id));
+    },
+    [loaded, saved],
   );
 
   if (error !== null) {
@@ -156,6 +208,14 @@ export function SettingsApp() {
             onChange={updateReminder}
             onAdd={addReminder}
             onRemove={removeReminder}
+          />
+        ) : null}
+        {tab === 'alarms' ? (
+          <AlarmsPanel
+            alarms={alarms}
+            onChange={updateAlarm}
+            onAdd={addAlarm}
+            onRemove={removeAlarm}
           />
         ) : null}
         {tab === 'behavior' ? <BehaviorPanel settings={settings} update={update} /> : null}
@@ -534,10 +594,169 @@ function RemindersPanel({
   );
 }
 
+/**
+ * The Alarms tab.
+ *
+ * An alarm is the inverse of a reminder: the user names a moment rather than an
+ * interval, and the useful part is usually the warning a few minutes beforehand
+ * rather than the moment itself — being told at eight that the meeting is at
+ * eight is too late to do anything about.
+ */
+function AlarmsPanel({
+  alarms,
+  onChange,
+  onAdd,
+  onRemove,
+}: {
+  alarms: readonly Alarm[];
+  onChange: (alarm: Alarm) => void;
+  onAdd: () => void;
+  onRemove: (id: string) => void;
+}) {
+  const avatars = useAvatarList();
+
+  return (
+    <Section title="Alarms">
+      {alarms.length === 0 ? (
+        <p className="muted">
+          No alarms yet. An alarm goes off at a time you choose — and can send the companion
+          out a few minutes beforehand to warn you.
+        </p>
+      ) : null}
+
+      {alarms.map((alarm) => (
+        <div className="reminder" key={alarm.id}>
+          <Row
+            label="What for"
+            control={
+              <input
+                className="text-input"
+                value={alarm.label}
+                aria-label="Alarm name"
+                placeholder="Standup"
+                onChange={(event) => onChange({ ...alarm, label: event.currentTarget.value })}
+              />
+            }
+          />
+          <Row
+            label="At"
+            hint={alarm.repeatDaily ? 'Every day' : 'The next time this comes round'}
+            control={
+              <input
+                className="text-input"
+                type="time"
+                value={formatTime(alarm.atMinutes)}
+                aria-label="Alarm time"
+                onChange={(event) => {
+                  const atMinutes = parseTime(event.currentTarget.value);
+                  if (atMinutes === null) return;
+                  // Re-anchored from now, so a time moved earlier in the day
+                  // means tomorrow rather than firing the moment it is typed.
+                  onChange(scheduleAlarm({ ...alarm, atMinutes }, Date.now()));
+                }}
+              />
+            }
+          />
+          <Row
+            label="Enabled"
+            control={
+              <Toggle
+                label={`Enable ${alarm.label}`}
+                checked={alarm.enabled}
+                onChange={(enabled) =>
+                  // Switching one back on re-anchors it: its stored moment is
+                  // in the past, and turning it on must not fire it at once.
+                  onChange(enabled ? scheduleAlarm({ ...alarm, enabled }, Date.now()) : { ...alarm, enabled })
+                }
+              />
+            }
+          />
+          <Row
+            label="Repeat daily"
+            hint={alarm.repeatDaily ? undefined : 'Off: it goes off once, then switches itself off'}
+            control={
+              <Toggle
+                label={`Repeat ${alarm.label} daily`}
+                checked={alarm.repeatDaily}
+                onChange={(repeatDaily) => onChange({ ...alarm, repeatDaily })}
+              />
+            }
+          />
+          <Row
+            label="Warn me"
+            hint="A first visit this long before the alarm itself"
+            control={
+              <Choice
+                label={`${alarm.label} warning`}
+                value={String(alarm.leadMinutes)}
+                options={LEAD_CHOICES.map((minutes) => ({
+                  value: String(minutes),
+                  label: minutes === 0 ? 'Not at all' : `${minutes} minutes before`,
+                }))}
+                onChange={(value) =>
+                  onChange({ ...alarm, leadMinutes: Number(value), leadDone: false })
+                }
+              />
+            }
+          />
+          <Row
+            label="Message"
+            hint="What it says. Left empty, it says the name above"
+            control={
+              <input
+                className="text-input"
+                value={alarm.message}
+                aria-label="Alarm message"
+                placeholder={`${alarm.label.trim() || 'Alarm'} — it's time.`}
+                onChange={(event) => onChange({ ...alarm, message: event.currentTarget.value })}
+              />
+            }
+          />
+          <Row
+            label="Avatar"
+            hint="Who delivers it"
+            control={
+              <Choice
+                label={`${alarm.label} avatar`}
+                value={alarm.avatarId ?? ''}
+                options={[
+                  { value: '', label: 'Whoever is on screen' },
+                  ...avatars.map((avatar) => ({ value: avatar.id, label: avatar.name })),
+                ]}
+                onChange={(avatarId) =>
+                  onChange({ ...alarm, avatarId: avatarId === '' ? null : avatarId })
+                }
+              />
+            }
+          />
+          <Row
+            label="Remove"
+            control={
+              <Button tone="danger" onClick={() => onRemove(alarm.id)}>
+                Delete
+              </Button>
+            }
+          />
+        </div>
+      ))}
+
+      <Row
+        label="Add an alarm"
+        hint="A time, and what to say when it comes round"
+        control={<Button onClick={onAdd}>Add</Button>}
+      />
+      <p className="muted">
+        Alarms still go off while reminders are paused: pausing stops the companion
+        interrupting you on its own, and an alarm is something you asked for.
+      </p>
+    </Section>
+  );
+}
+
 /** Spelled out per mode, because "only when reminding me" is not self-evident. */
 const ROAM_HINTS: Readonly<Record<RoamMode, string>> = {
   always: 'Wanders around your screen on its own.',
-  'reminders-only': 'Stays hidden, peeks around a screen edge, comes to the centre with a reminder, then runs away.',
+  'reminders-only': 'Stays hidden, peeks around a screen edge, steps into that corner with a reminder, then runs away.',
   never: 'Never moves by itself. You can still drag it anywhere.',
 };
 

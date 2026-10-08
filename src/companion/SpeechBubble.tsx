@@ -39,7 +39,15 @@ export const SpeechBubble = memo(function SpeechBubble({
     >
       <div className="bubble__body" style={{ transformOrigin: `${layout.tailX}px 100%` }}>
         <p className="bubble__text">{text}</p>
-        <span className="bubble__tail" style={{ left: layout.tailX }} aria-hidden="true" />
+        {/* Three dots stepping down to the character's head, the way a thought
+            balloon connects to whoever is thinking. A solid tail had to be
+            drawn as a rotated square whose borders lined up with the box;
+            dots are independent of the box and read at any size. */}
+        <span className="bubble__dots" style={{ left: layout.tailX }} aria-hidden="true">
+          <span className="bubble__dot" />
+          <span className="bubble__dot" />
+          <span className="bubble__dot" />
+        </span>
       </div>
     </div>
   );

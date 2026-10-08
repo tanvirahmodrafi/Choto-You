@@ -8,6 +8,13 @@ export const EventPriority = {
   NORMAL: 10,
   REACTION: 20,
   REMINDER: 30,
+  /**
+   * A clock alarm, which outranks a reminder.
+   *
+   * A reminder can wait for the next quiet moment; an alarm the user set for a
+   * particular minute cannot, and must not be left behind a queued one.
+   */
+  ALARM: 40,
 } as const;
 
 export interface CompanionEvent {
@@ -62,8 +69,15 @@ export class EventQueue {
     this.events = this.events.filter((event) => event.key !== key);
   }
 
-  clear(): void {
-    this.events = [];
+  /**
+   * Drops queued events, or only those matching a predicate.
+   *
+   * The filtered form exists because pausing reminders must not throw away a
+   * queued alarm: the alarm's own schedule has already moved past it, so a
+   * dropped one would never come back.
+   */
+  clear(matches?: (event: CompanionEvent) => boolean): void {
+    this.events = matches ? this.events.filter((event) => !matches(event)) : [];
   }
 
   private dropExpired(now: number): void {

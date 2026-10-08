@@ -17,11 +17,17 @@ import { clamp, type Rect, type Vector2 } from '@/movement/types';
 export interface BubbleMetrics {
   readonly width: number;
   readonly height: number;
-  /** Space between the bubble's tail and the top of the character. */
+  /**
+   * Space between the bubble's box and the top of the character.
+   *
+   * It has to clear the trail of dots that joins the two, which hang below the
+   * box in CSS and are not part of its measured height. Too small and the
+   * lowest dot is drawn over the character's hair.
+   */
   readonly gap: number;
 }
 
-export const DEFAULT_BUBBLE_METRICS: BubbleMetrics = { width: 240, height: 76, gap: 8 };
+export const DEFAULT_BUBBLE_METRICS: BubbleMetrics = { width: 240, height: 76, gap: 40 };
 
 /** Which side of the character the bubble extends towards. */
 export type BubbleSide = 'left' | 'right';

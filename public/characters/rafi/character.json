@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 2,
+  "id": "rafi",
+  "name": "Choto Rafi",
+  "version": "1.0.0",
+  "author": "Original artwork, bundled with the application",
+  "license": "Original artwork, bundled with the application",
+  "thumbnail": "thumbnail.png",
+  "frameSize": {
+    "width": 256,
+    "height": 256
+  },
+  "defaultScale": 0.5,
+  "facing": "right",
+  "anchor": {
+    "x": 0.5,
+    "y": 0.977
+  },
+  "hitbox": {
+    "x": 0.218,
+    "y": 0.05,
+    "width": 0.524,
+    "height": 0.942
+  },
+  "movement": {
+    "walkSpeed": 70,
+    "runSpeed": 150
+  },
+  "animations": {
+    "idle": {
+      "format": "png-sequence",
+      "fps": 6,
+      "loop": true,
+      "frames": [
+        "idle/001.png",
+        "idle/002.png",
+        "idle/003.png",
+        "idle/004.png",
+        "idle/005.png",
+        "idle/006.png",
+        "idle/007.png",
+        "idle/008.png"
+      ]
+    },
+    "walk": {
+      "format": "png-sequence",
+      "fps": 8,
+      "loop": true,
+      "frames": [
+        "walk/001.png",
+        "walk/002.png",
+        "walk/003.png",
+        "walk/004.png",
+        "walk/005.png",
+        "walk/006.png",
+        "walk/007.png",
+        "walk/008.png"
+      ]
+    },
+    "wave": {
+      "format": "png-sequence",
+      "fps": 6,
+      "loop": true,
+      "frames": [
+        "wave/001.png",
+        "wave/002.png",
+        "wave/003.png",
+        "wave/004.png",
+        "wave/005.png",
+        "wave/006.png",
+        "wave/007.png",
+        "wave/008.png"
+      ]
+    },
+    "jump": {
+      "format": "png-sequence",
+      "fps": 2,
+      "loop": false,
+      "frames": [
+        "jump/001.png"
+      ]
+    },
+    "fall": {
+      "format": "png-sequence",
+      "fps": 1,
+      "loop": true,
+      "frames": [
+        "fall/001.png"
+      ]
+    },
+    "land": {
+      "format": "png-sequence",
+      "fps": 2,
+      "loop": false,
+      "frames": [
+        "land/001.png"
+      ]
+    },
+    "happy": {
+      "format": "png-sequence",
+      "fps": 2,
+      "loop": false,
+      "frames": [
+        "happy/001.png"
+      ]
+    },
+    "surprised": {
+      "format": "png-sequence",
+      "fps": 2,
+      "loop": false,
+      "frames": [
+        "surprised/001.png"
+      ]
+    },
+    "drink": {
+      "format": "png-sequence",
+      "fps": 2,
+      "loop": false,
+      "frames": [
+        "drink/001.png"
+      ]
+    },
+    "dragged": {
+      "format": "png-sequence",
+      "fps": 1,
+      "loop": true,
+      "frames": [
+        "dragged/001.png"
+      ]
+    },
+    "sleep": {
+      "format": "png-sequence",
+      "fps": 1,
+      "loop": true,
+      "frames": [
+        "sleep/001.png"
+      ]
+    },
+    "wake": {
+      "format": "png-sequence",
+      "fps": 2,
+      "loop": false,
+      "frames": [
+        "sleep/001.png"
+      ]
+    }
+  }
+}

@@ -54,7 +54,13 @@ describe('mergeSettings', () => {
   });
 
   it('treats an empty character id as missing', () => {
-    expect(mergeSettings({ character: { characterId: '' } }).character.characterId).toBe('pip');
+    expect(mergeSettings({ character: { characterId: '' } }).character.characterId).toBe('rafi');
+    // An install from before the bundled avatars were replaced.
+    expect(mergeSettings({ character: { characterId: 'pip' } }).character.characterId).toBe('rafi');
+    // An imported avatar is still the user's own choice.
+    expect(mergeSettings({ character: { characterId: 'user:nora' } }).character.characterId).toBe(
+      'user:nora',
+    );
   });
 
   it('accepts a null specific display, and keeps a real one', () => {

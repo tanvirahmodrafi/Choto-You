@@ -28,6 +28,12 @@ pub fn plugin() -> TauriPlugin<Wry, Option<PluginConfig>> {
             sql: include_str!("../migrations/002_reminder_avatars.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 3,
+            description: "alarms at a time of day",
+            sql: include_str!("../migrations/003_alarms.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri_plugin_sql::Builder::default()

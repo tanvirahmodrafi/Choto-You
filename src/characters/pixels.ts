@@ -320,28 +320,84 @@ function borderPalette(
 }
 
 /**
- * Finds where the rows of a sprite sheet actually divide.
+ * How far from the even split an *empty* scanline is accepted, as a fraction of
+ * one row's height.
+ *
+ * Wide, because this is what rescues a sheet drawn too large: every row
+ * overflowing by a tenth of a cell moves the last boundary by nearly half a
+ * cell. It cannot wander into a neighbouring row's gap, because the candidate
+ * nearest the expected position wins.
+ */
+const EMPTY_SEARCH_FRACTION = 0.45;
+
+/**
+ * Finds where the rows of a sprite sheet actually divide, column by column.
  *
  * An even division assumes the model placed its grid perfectly, and it does
  * not: measured on a real sheet the first boundary sat 7px below where an even
  * split put it, so the cut ran through the character's shoes and the next row
  * was rendered with a pair of shoes floating above its head.
  *
- * Each internal boundary is therefore snapped to the emptiest scanline near
- * where it was expected. Where two rows genuinely touch, that is the
- * least-damaging cut rather than a clean one, which is still better than an
- * arbitrary one.
+ * Each boundary is therefore snapped to the emptiest scanline near where it was
+ * expected. Where two rows genuinely touch, that is the least-damaging cut
+ * rather than a clean one, which is still better than an arbitrary one.
  *
- * Columns are left alone: a character is narrow relative to its cell, so the
- * vertical gutters are wide and an even split lands safely inside them.
+ * An empty scanline is looked for first, and over a much wider range than the
+ * even split suggests, because a sheet drawn larger than its cells pushes every
+ * gap downwards: measured on one, the first real gap sat 15px beyond the end of
+ * a 15% window, so the cut fell inside the figure and took 29px — the whole of
+ * the white shoes — off the bottom of all eight drawings in that row. An empty
+ * scanline cannot be inside a figure, so looking further for one is safe where
+ * widening the *least-bad* search would not be.
  *
- * @returns `rows + 1` boundaries, from 0 to `height`.
+ * The search runs **per column** because whether a row overflows is a property
+ * of one drawing, not of the row: on another sheet, four of eight columns had a
+ * clean gap at the boundary while the other four did not, and a single cut
+ * across the sheet took the shoes off all of them. Found separately, seven of
+ * the eight kept their feet.
+ *
+ * Columns themselves are split evenly: a character is narrow relative to its
+ * cell, so the vertical gutters are wide and an even split lands inside them.
+ *
+ * @returns One array of `rows + 1` boundaries per column, each from 0 to
+ *   `height` and strictly increasing.
  */
-export function detectRowBoundaries(
+export function detectCellBoundaries(
   data: Uint8ClampedArray,
   width: number,
   height: number,
   rows: number,
+  columns: number,
+  searchFraction = 0.15,
+): number[][] {
+  const cellWidth = Math.floor(width / columns);
+  return Array.from({ length: columns }, (_, column) =>
+    boundariesWithin(
+      data,
+      width,
+      height,
+      rows,
+      column * cellWidth,
+      column === columns - 1 ? width : (column + 1) * cellWidth,
+      searchFraction,
+    ),
+  );
+}
+
+/**
+ * The same search over one vertical strip of the sheet.
+ *
+ * `left` is inclusive, `right` exclusive. Passing the whole width treats the
+ * sheet as a single column, which is what a caller wants when the columns
+ * cannot be separated.
+ */
+export function boundariesWithin(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  rows: number,
+  left: number,
+  right: number,
   searchFraction = 0.15,
 ): number[] {
   const band = height / rows;
@@ -349,26 +405,50 @@ export function detectRowBoundaries(
   for (let y = 0; y < height; y++) {
     let count = 0;
     const start = y * width * 4;
-    for (let x = 0; x < width; x++) {
+    for (let x = left; x < right; x++) {
       if ((data[start + x * 4 + 3] ?? 0) > OPAQUE_ENOUGH) count++;
     }
     occupancy[y] = count;
   }
 
   const boundaries: number[] = [0];
-  const window = Math.max(1, Math.floor(band * searchFraction));
+  const nearWindow = Math.max(1, Math.floor(band * searchFraction));
+  const wideWindow = Math.max(1, Math.floor(band * EMPTY_SEARCH_FRACTION));
 
   for (let index = 1; index < rows; index++) {
     const expected = Math.round(index * band);
-    const low = Math.max(boundaries[index - 1]! + 1, expected - window);
-    const high = Math.min(height - 1, expected + window);
+    const floor = boundaries[index - 1]! + 1;
 
+    // An empty scanline, nearest to where the boundary was expected. Nothing
+    // inside a drawing is empty, so one found further out is still that
+    // drawing's real edge rather than a worse guess.
+    let found: number | null = null;
+    for (let distance = 0; distance <= wideWindow && found === null; distance++) {
+      for (const candidate of distance === 0 ? [expected] : [expected - distance, expected + distance]) {
+        if (candidate < floor || candidate > height - 1) continue;
+        if ((occupancy[candidate] ?? 0) === 0) {
+          found = candidate;
+          break;
+        }
+      }
+    }
+
+    if (found !== null) {
+      boundaries.push(found);
+      continue;
+    }
+
+    // Nothing empty anywhere near: the rows genuinely touch. Take the
+    // least-damaging cut, close to where it was expected — going further afield
+    // for a slightly thinner part of the character helps nobody.
+    const low = Math.max(floor, expected - nearWindow);
+    const high = Math.min(height - 1, expected + nearWindow);
     let best = expected;
     let bestOccupancy = Number.POSITIVE_INFINITY;
     for (let y = low; y <= high; y++) {
       const here = occupancy[y] ?? 0;
       // Ties go to the candidate nearest where the boundary was expected, so a
-      // run of empty scanlines does not pull the cut to one end of the gap.
+      // thin run of near-empty scanlines does not pull the cut to one end.
       if (here < bestOccupancy || (here === bestOccupancy && Math.abs(y - expected) < Math.abs(best - expected))) {
         best = y;
         bestOccupancy = here;

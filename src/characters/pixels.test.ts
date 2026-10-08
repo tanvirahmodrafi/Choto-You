@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  detectRowBoundaries,
+  boundariesWithin,
+  detectCellBoundaries,
   floodFillBackground,
   isMostlyTransparent,
   keyOutBackground,
@@ -317,7 +318,7 @@ describe('floodFillBackground', () => {
   });
 });
 
-describe('detectRowBoundaries', () => {
+describe('detectCellBoundaries', () => {
   /** Builds a sheet of `rows` bands, each with a drawn block at a given offset. */
   function sheet(
     width: number,
@@ -335,7 +336,7 @@ describe('detectRowBoundaries', () => {
 
   it('returns one more boundary than there are rows, spanning the image', () => {
     const data = sheet(20, 100, [{ top: 5, bottom: 20 }]);
-    const edges = detectRowBoundaries(data, 20, 100, 4);
+    const edges = boundariesWithin(data, 20, 100, 4, 0, 20);
 
     expect(edges).toHaveLength(5);
     expect(edges[0]).toBe(0);
@@ -349,7 +350,7 @@ describe('detectRowBoundaries', () => {
       { top: 5, bottom: 54 },
       { top: 58, bottom: 95 },
     ]);
-    const edges = detectRowBoundaries(data, 20, 100, 2);
+    const edges = boundariesWithin(data, 20, 100, 2, 0, 20);
 
     expect(edges[1]).toBeGreaterThanOrEqual(54);
     expect(edges[1]).toBeLessThanOrEqual(58);
@@ -359,17 +360,105 @@ describe('detectRowBoundaries', () => {
     // No gap at all: the least-damaging cut is still wanted, near the expected
     // position rather than at an arbitrary place.
     const data = sheet(20, 100, [{ top: 0, bottom: 100 }]);
-    const edges = detectRowBoundaries(data, 20, 100, 2);
+    const edges = boundariesWithin(data, 20, 100, 2, 0, 20);
 
     expect(Math.abs((edges[1] ?? 0) - 50)).toBeLessThanOrEqual(8);
   });
 
   it('keeps boundaries strictly increasing', () => {
     const data = sheet(20, 100, [{ top: 0, bottom: 100 }]);
-    const edges = detectRowBoundaries(data, 20, 100, 4);
+    const edges = boundariesWithin(data, 20, 100, 4, 0, 20);
 
     for (let index = 1; index < edges.length; index++) {
       expect(edges[index]!).toBeGreaterThan(edges[index - 1]!);
+    }
+  });
+
+  it('finds a real gap that sits well outside the even split', () => {
+    // The measured failure: on a sheet whose rows were drawn at 120% of their
+    // cell height, the first real gap sat 15px beyond a 15% window, so the cut
+    // landed inside the figure and took 29px — the white shoes — off the bottom
+    // of every drawing in the row.
+    const width = 20;
+    const height = 100;
+    const data = new Uint8ClampedArray(width * height * 4);
+    const draw = (top: number, bottom: number): void => {
+      for (let y = top; y < bottom; y++) {
+        for (let x = 2; x < width - 2; x++) data[(y * width + x) * 4 + 3] = 255;
+      }
+    };
+
+    // Two rows of 60 in a 100px sheet: the gap is at 61, where an even split
+    // would cut at 50 and a 15% window would reach only 57.
+    draw(1, 61);
+    draw(64, 99);
+
+    const edges = boundariesWithin(data, width, height, 2, 0, width);
+
+    expect(edges[1]).toBeGreaterThanOrEqual(61);
+    expect(edges[1]).toBeLessThanOrEqual(64);
+  });
+
+  it('prefers the gap nearest the expected boundary, not the first one found', () => {
+    const width = 20;
+    const height = 120;
+    const data = new Uint8ClampedArray(width * height * 4);
+    const draw = (top: number, bottom: number): void => {
+      for (let y = top; y < bottom; y++) {
+        for (let x = 2; x < width - 2; x++) data[(y * width + x) * 4 + 3] = 255;
+      }
+    };
+
+    // Three bands, so the wide search around the first boundary (expected 40)
+    // can see both the gap at 30 and the gap at 52. The nearer one wins.
+    draw(1, 30);
+    draw(34, 52);
+    draw(56, 119);
+
+    const edges = boundariesWithin(data, width, height, 3, 0, width);
+
+    expect(edges[1]).toBeGreaterThanOrEqual(30);
+    expect(edges[1]).toBeLessThanOrEqual(33);
+  });
+
+  it('lets one column cut lower than another to spare the feet', () => {
+    // The measured failure: a sheet drawn larger than its cells, where one
+    // column's figure overflows the boundary and the next column's does not.
+    // A single cut across the sheet has to take the shoes off the overflowing
+    // one; found per column, it can go below them.
+    const width = 20;
+    const height = 100;
+    const data = new Uint8ClampedArray(width * height * 4);
+    const draw = (left: number, right: number, top: number, bottom: number): void => {
+      for (let y = top; y < bottom; y++) {
+        for (let x = left; x < right; x++) data[(y * width + x) * 4 + 3] = 255;
+      }
+    };
+
+    // Left column: ends well above the halfway line. Right column: overflows
+    // past it, with its own gap a few pixels lower.
+    draw(1, 9, 5, 44);
+    draw(1, 9, 56, 95);
+    draw(11, 19, 5, 54);
+    draw(11, 19, 58, 95);
+
+    const edges = detectCellBoundaries(data, width, height, 2, 2);
+
+    expect(edges).toHaveLength(2);
+    expect(edges[0]![1]).toBeLessThanOrEqual(56);
+    // The overflowing column keeps everything down to its own gap.
+    expect(edges[1]![1]).toBeGreaterThanOrEqual(54);
+    expect(edges[1]![1]).toBeLessThanOrEqual(58);
+  });
+
+  it('splits the columns evenly, including a width that does not divide', () => {
+    const data = sheet(21, 100, [{ top: 5, bottom: 20 }]);
+    const edges = detectCellBoundaries(data, 21, 100, 2, 2);
+
+    expect(edges).toHaveLength(2);
+    for (const column of edges) {
+      expect(column[0]).toBe(0);
+      expect(column[column.length - 1]).toBe(100);
     }
   });
 });

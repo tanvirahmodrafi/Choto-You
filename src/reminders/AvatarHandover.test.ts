@@ -76,13 +76,14 @@ describe('avatar handover', () => {
     expect(handover.stage).not.toBe('swapping');
   });
 
-  it('walks in to the centre and holds there for the reminder', () => {
+  it('walks in to the corner it came from and holds there for the reminder', () => {
     const handover = new AvatarHandover();
     arrive(handover, left + 300);
 
     expect(handover.stage).toBe('present');
     expect(handover.isPresenting).toBe(true);
-    expect(handover.position).toEqual({ x: Math.round((left + right) / 2), y: ground });
+    // The corner it entered at, not the middle of the display.
+    expect(handover.position).toEqual({ x: left + 18, y: ground });
     expect(handover.offset).toBe(0);
     expect(handover.facing).toBe('inward');
 

@@ -82,7 +82,7 @@ export const DEFAULT_SETTINGS: Settings = {
     companionVisible: true,
   },
   character: {
-    characterId: 'pip',
+    characterId: 'rafi',
     scale: 1,
     speedMultiplier: 1,
     animationSpeed: 1,

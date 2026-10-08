@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { AnimationPlayer } from '@/animation/AnimationPlayer';
 import type { AnimationClip } from '@/animation/types';
 import { ReminderPerformance } from './ReminderPerformance';
-import type { Reminder } from './types';
+import { announcementFor, type Announcement, type Reminder } from './types';
 
 function clip(name: string, loop = true): AnimationClip {
   return { name, fps: 10, loop, frames: [`${name}/1.png`, `${name}/2.png`] };
@@ -26,7 +26,10 @@ const water: Reminder = {
   nextTrigger: 0,
 };
 
-function setup(reminder: Reminder = water) {
+/** The reminder as the coordinator would hand it to a performance. */
+const announcement = announcementFor(water, 0);
+
+function setup(reminder: Announcement = announcement) {
   const player = new AnimationPlayer(CLIPS);
   const showBubble = vi.fn();
   const hideBubble = vi.fn();
@@ -86,7 +89,7 @@ describe('ReminderPerformance', () => {
   it('works for a reminder with no follow-up animation', () => {
     // Built by omission rather than by assigning undefined: the field is
     // genuinely optional under exactOptionalPropertyTypes.
-    const { followUpAnimation: _omitted, ...withoutFollowUp } = water;
+    const { followUpAnimation: _omitted, ...withoutFollowUp } = announcement;
     const { performance, player, hideBubble } = setup({
       ...withoutFollowUp,
       animation: 'happy',
@@ -117,7 +120,7 @@ describe('ReminderPerformance', () => {
   });
 
   it('falls back to idle when the character lacks the reminder animation', () => {
-    const { player } = setup({ ...water, animation: 'backflip' });
+    const { player } = setup({ ...announcement, animation: 'backflip' });
     // A missing animation must not stop the reminder being shown.
     expect(player.currentName).toBe('idle');
   });

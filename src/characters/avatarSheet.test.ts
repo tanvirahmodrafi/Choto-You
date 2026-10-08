@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CELL_LAYOUT,
+  DRAG_SEQUENCE,
   SHEET_COLUMNS,
   SHEET_HEIGHT,
   SHEET_PLAN,
@@ -73,13 +75,63 @@ describe('buildAvatarPrompt', () => {
 
   it('reads sensibly with nothing supplied', () => {
     const prompt = buildAvatarPrompt({ name: '  ', extras: '  ' });
-    expect(prompt).toContain('the person in the photo');
+    expect(prompt).toContain('the person in the attached photo');
     expect(prompt).not.toContain('ALSO:');
     expect(prompt).not.toContain('""');
   });
 
-  it('demands a constant baseline, which the pack anchor depends on', () => {
-    expect(buildAvatarPrompt()).toContain('SAME horizontal baseline');
+  it('states the size and the baseline the slicer depends on', () => {
+    const prompt = buildAvatarPrompt();
+
+    // Stated as fractions of the cell, because the canvas size the prompt asks
+    // for is the one thing models reliably ignore: a rule in pixels stops
+    // applying the moment the sheet comes back at another resolution.
+    expect(prompt).toContain(`${CELL_LAYOUT.characterHeight * 100}% of the cell's height`);
+    expect(prompt).toContain(`${CELL_LAYOUT.baseline * 100}% of the way down the cell`);
+    expect(prompt).toContain(`${CELL_LAYOUT.margin * 100}% of the cell`);
+
+    // And in pixels too, for the size actually requested.
+    const cellHeight = SHEET_HEIGHT / SHEET_ROWS;
+    expect(prompt).toContain(`${Math.round(cellHeight * CELL_LAYOUT.characterHeight)}px`);
+    expect(prompt).toContain(`${Math.round(cellHeight * CELL_LAYOUT.baseline)}px`);
+  });
+
+  it('asks for the real person in the photo, not a generic mascot', () => {
+    // Nothing in the prompt used to say that the attached image is a real
+    // person whose face has to be reproduced, so sheets came back as a
+    // plausible cartoon of somebody else.
+    const prompt = buildAvatarPrompt();
+    expect(prompt).toMatch(/REAL PERSON/);
+    expect(prompt).toMatch(/shape of the face and jaw/i);
+    expect(prompt).toMatch(/Simplify the STYLE, never the identity/i);
+  });
+
+  it('asks for being picked up, dropped and landing as one sequence', () => {
+    const prompt = buildAvatarPrompt();
+    const poses = SHEET_PLAN.find((row) => row.kind === 'poses');
+    if (poses?.kind !== 'poses') throw new Error('The plan has no row of poses.');
+
+    // The cells are named by number, derived from the plan rather than written
+    // out, because the row's order is a wire format and cannot be rearranged to
+    // put them next to each other.
+    const numbers = DRAG_SEQUENCE.map(
+      (slot) => poses.cells.findIndex((cell) => cell.slot === slot) + 1,
+    );
+    expect(numbers.every((number) => number > 0)).toBe(true);
+    expect(prompt).toContain(`cells ${numbers[0]}, ${numbers[1]} and ${numbers[2]} are three moments of ONE event`);
+    expect(prompt).toMatch(/picks the character up by hand, lets go of it, and it lands/);
+  });
+
+  it('keeps the remaining poses in one register rather than five styles', () => {
+    expect(buildAvatarPrompt()).toMatch(/one family rather than five unrelated drawings/);
+  });
+
+  it('warns that a character drawn too large loses its feet', () => {
+    // The failure the numbers exist to prevent: sheets came back with figures
+    // taller than their cells, so the cut went through the shoes.
+    const prompt = buildAvatarPrompt();
+    expect(prompt).toContain('feet');
+    expect(prompt).toMatch(/never more than 80%/i);
   });
 });
 

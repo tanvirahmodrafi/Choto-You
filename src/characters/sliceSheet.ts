@@ -1,6 +1,6 @@
 import { createLogger } from '@/utils/logger';
 import {
-  detectRowBoundaries,
+  detectCellBoundaries,
   floodFillBackground,
   isMostlyTransparent,
   measureOpaqueBounds,
@@ -90,17 +90,26 @@ export async function sliceSheet(
       if (removedBackground) sheet.putImageData(full, 0, 0);
     }
 
-    // Rows are found from the artwork, not assumed. The model's grid is rarely
-    // exactly even, and a boundary a few pixels out slices through the feet of
-    // the row above — which then appear floating over the next row's head.
-    const rowEdges = detectRowBoundaries(full.data, full.width, full.height, rows);
+    // Rows are found from the artwork, not assumed, and separately for each
+    // column: the model's grid is rarely exactly even, and whether a figure
+    // overflows its cell is a property of that one drawing. A boundary a few
+    // pixels out slices through the feet of the row above — which then appear
+    // floating over the next row's head.
+    const edges = detectCellBoundaries(full.data, full.width, full.height, rows, columns);
 
-    // One frame size for the whole pack, taken from the tallest row. Each row's
-    // band is drawn bottom-aligned into it, so the characters stand on a common
-    // line and the alignment *within* a row — which is what an animation loops
-    // over — is left exactly as the model drew it.
+    // The line every column of a row is measured from: the lowest cut any of
+    // them needed. Each column is then placed relative to it rather than
+    // flush with the bottom of the frame, so a column that kept a few more
+    // pixels than its neighbours does not sit a few pixels higher than them —
+    // the alignment *within* a row is what an animation loops over.
+    const rowFloor = (row: number): number =>
+      Math.max(...edges.map((column) => column[row + 1] ?? (row + 1) * cellHeight));
+    const rowCeiling = (row: number): number =>
+      Math.min(...edges.map((column) => column[row] ?? row * cellHeight));
+
+    // One frame size for the whole pack, taken from the tallest row.
     const frameHeight = Math.max(
-      ...Array.from({ length: rows }, (_, index) => (rowEdges[index + 1] ?? 0) - (rowEdges[index] ?? 0)),
+      ...Array.from({ length: rows }, (_, row) => rowFloor(row) - rowCeiling(row)),
     );
 
     const cells: SlicedCell[] = [];
@@ -110,10 +119,12 @@ export async function sliceSheet(
     let fragmentsRemoved = 0;
 
     for (let row = 0; row < rows; row++) {
-      const top = rowEdges[row] ?? row * cellHeight;
-      const bandHeight = (rowEdges[row + 1] ?? top + cellHeight) - top;
+      const floor = rowFloor(row);
 
       for (let column = 0; column < columns; column++) {
+        const top = edges[column]?.[row] ?? row * cellHeight;
+        const bandHeight = (edges[column]?.[row + 1] ?? top + cellHeight) - top;
+
         cell.clearRect(0, 0, cellWidth, frameHeight);
         cell.drawImage(
           sheet.canvas,
@@ -122,9 +133,10 @@ export async function sliceSheet(
           cellWidth,
           bandHeight,
           0,
-          // Bottom-aligned: a shorter band is padded above, never below, so the
-          // character's feet stay on the frame's floor.
-          frameHeight - bandHeight,
+          // Positioned against the row's floor rather than the frame's, so
+          // every column of a row keeps the vertical registration the model
+          // drew. A shorter band is padded above, never below.
+          frameHeight - (floor - top),
           cellWidth,
           bandHeight,
         );
@@ -163,7 +175,7 @@ export async function sliceSheet(
     log.info(`Sliced a sheet into ${cells.length} cell(s) of ${cellWidth}×${frameHeight}`, {
       removedBackground,
       fragmentsRemoved,
-      rowEdges,
+      rowEdges: edges,
       evenSplitWouldHaveBeen: Array.from({ length: rows + 1 }, (_, i) => Math.round(i * (bitmap.height / rows))),
     });
     return {

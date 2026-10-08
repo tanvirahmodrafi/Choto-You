@@ -12,8 +12,20 @@ const log = createLogger('DISPLAY');
  * Monitors may be stacked vertically, offset diagonally, have different
  * resolutions and scale factors, and sit at negative coordinates.
  */
+/**
+ * How many consecutive empty enumerations are tolerated before the primary
+ * monitor alone is adopted as the layout.
+ *
+ * A single empty answer is a hiccup and the known layout is worth more than it.
+ * Three in a row (about nine seconds at the watcher's poll interval) means the
+ * old layout is not coming back, and standing on a display that no longer
+ * exists is worse than standing on one display out of two.
+ */
+const EMPTY_ENUMERATIONS_BEFORE_FALLBACK = 3;
+
 export class DisplayManager {
   private displays: readonly DisplayInfo[] = [];
+  private emptyEnumerations = 0;
   private readonly listeners = new Set<() => void>();
 
   get all(): readonly DisplayInfo[] {
@@ -35,17 +47,36 @@ export class DisplayManager {
    */
   async refresh(): Promise<boolean> {
     const [monitors, primary] = await Promise.all([availableMonitors(), primaryMonitor()]);
-    const ids = assignIds(monitors);
-    const next = monitors.map((monitor, index) =>
+
+    // Enumeration comes back empty often enough to matter — during wake, at
+    // login, and (measured) for minutes at a time after the displays were
+    // rearranged while the overlay was off-screen. The primary monitor is
+    // asked for separately and kept answering through that, so after a few
+    // empty answers one real display is adopted rather than none: a stale
+    // layout leaves the companion at coordinates no screen covers any more,
+    // which is both invisible and self-sustaining — an off-screen webview is
+    // throttled, so it polls less often and takes even longer to notice.
+    let found: readonly Monitor[] = monitors;
+    if (found.length === 0) {
+      this.emptyEnumerations++;
+      if (!primary || this.emptyEnumerations < EMPTY_ENUMERATIONS_BEFORE_FALLBACK) {
+        // Keep the previous layout rather than adopting an empty one: better a
+        // stale monitor than no coordinate space at all.
+        log.error('OS reported no monitors; keeping the previous layout');
+        return false;
+      }
+      log.warn(
+        `OS listed no monitors ${this.emptyEnumerations} times; falling back to the primary one`,
+      );
+      found = [primary];
+    } else {
+      this.emptyEnumerations = 0;
+    }
+
+    const ids = assignIds(found);
+    const next = found.map((monitor, index) =>
       toDisplayInfo(monitor, index, primary, ids[index] ?? `Display ${index + 1}`),
     );
-
-    if (next.length === 0) {
-      // Keep the previous layout rather than adopting an empty one: better a
-      // stale monitor than no coordinate space at all.
-      log.error('OS reported no monitors; keeping the previous layout');
-      return false;
-    }
 
     if (sameLayout(this.displays, next)) return false;
 

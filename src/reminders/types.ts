@@ -1,3 +1,5 @@
+import { EventPriority } from '@/behavior/EventQueue';
+
 /**
  * Reminder model.
  *
@@ -36,6 +38,72 @@ export interface Reminder {
 
 /** A reminder before it has ever been scheduled. */
 export type ReminderDefinition = Omit<Reminder, 'lastTriggered' | 'nextTrigger'>;
+
+/**
+ * Something the companion interrupts the user with, stripped of why.
+ *
+ * An interval reminder and a clock alarm are scheduled by completely different
+ * rules, but what happens once either is due is identical: borrow an avatar,
+ * walk out, play an animation, hold a bubble up, leave. This is where the two
+ * meet, so that the queue, the performance and the companion's own
+ * choreography need to know about only one kind of thing.
+ */
+export interface Announcement {
+  /** Queue key. Announcements sharing one replace each other rather than stack. */
+  readonly key: string;
+  /** Short name for the log. */
+  readonly title: string;
+  readonly message: string;
+  readonly animation: string;
+  readonly followUpAnimation?: string;
+  readonly bubbleSeconds: number;
+  readonly sound?: string;
+  /** Who delivers it, or null for whoever is on screen. */
+  readonly avatarId?: string | null;
+  /**
+   * How the companion arrives to say it.
+   *
+   * `in-place` lets it speak from wherever it happens to be standing, which is
+   * what a reminder does while it is roaming around anyway. `from-edge` sends
+   * it off the nearest edge first and walks it back in to the corner, so the
+   * announcement has an entrance — an alarm is a moment the user chose, and it
+   * reads as one rather than as the character suddenly talking.
+   *
+   * Reminder-only mode always arrives from an edge: there is nothing on screen
+   * to speak from.
+   */
+  readonly entrance: 'in-place' | 'from-edge';
+  /** Dropped if it has not been shown by this time. Epoch milliseconds. */
+  readonly expiresAt: number;
+  readonly priority: number;
+}
+
+/**
+ * How long a queued reminder stays relevant, in milliseconds.
+ *
+ * A reminder that could not be shown — because the companion was being
+ * dragged, or mid-way between displays — should still appear shortly
+ * afterwards, but a "drink some water" from twenty minutes ago is noise.
+ */
+export const REMINDER_LIFETIME_MS = 5 * 60_000;
+
+export function announcementFor(reminder: Reminder, now: number): Announcement {
+  return {
+    // Keyed by reminder id, so one that could not be shown appears once when
+    // the companion is free again, not once per missed interval.
+    key: `reminder:${reminder.id}`,
+    title: reminder.title,
+    message: reminder.message,
+    animation: reminder.animation,
+    ...(reminder.followUpAnimation ? { followUpAnimation: reminder.followUpAnimation } : {}),
+    bubbleSeconds: reminder.bubbleSeconds,
+    ...(reminder.sound ? { sound: reminder.sound } : {}),
+    avatarId: reminder.avatarId ?? null,
+    entrance: 'in-place',
+    expiresAt: now + REMINDER_LIFETIME_MS,
+    priority: EventPriority.REMINDER,
+  };
+}
 
 export const BUILT_IN_REMINDERS: readonly ReminderDefinition[] = [
   {

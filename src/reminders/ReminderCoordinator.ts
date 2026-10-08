@@ -1,22 +1,16 @@
 import type { AnimationPlayer } from '@/animation/AnimationPlayer';
-import { EventPriority, EventQueue } from '@/behavior/EventQueue';
+import { AlarmScheduler } from '@/alarms/AlarmScheduler';
+import { announcementFor as announcementForAlarm, type Alarm } from '@/alarms/types';
+import { EventQueue } from '@/behavior/EventQueue';
+import type { AlarmRepository } from '@/database/AlarmRepository';
 import type { ReminderRepository } from '@/database/ReminderRepository';
 import type { SoundPlayer } from '@/services/SoundPlayer';
 import { createLogger } from '@/utils/logger';
 import { ReminderPerformance } from './ReminderPerformance';
 import { ReminderScheduler } from './ReminderScheduler';
-import type { Reminder } from './types';
+import { announcementFor, type Announcement, type Reminder } from './types';
 
 const log = createLogger('REMINDER');
-
-/**
- * How long a queued reminder stays relevant, in milliseconds.
- *
- * A reminder that could not be shown — because the companion was being
- * dragged, or mid-way between displays — should still appear shortly
- * afterwards, but a "drink some water" from twenty minutes ago is noise.
- */
-const REMINDER_LIFETIME_MS = 5 * 60_000;
 
 /** What the coordinator needs from the companion around it. */
 export interface ReminderHost {
@@ -24,10 +18,10 @@ export interface ReminderHost {
   /** True while the companion must not be interrupted. */
   isBusy(): boolean;
   /**
-   * Called just before a reminder is performed, to clear the way. Receives the
-   * reminder so the host can honour its avatar and walk out to deliver it.
+   * Called just before an announcement is performed, to clear the way. Receives
+   * it so the host can honour its avatar and walk out to deliver it.
    */
-  prepareForReminder(reminder: Reminder): void;
+  prepareForReminder(announcement: Announcement): void;
   /** Entrance choreography must finish before the greeting and message start. */
   isReadyForReminder?(): boolean;
   /**
@@ -39,8 +33,13 @@ export interface ReminderHost {
 }
 
 /**
- * Owns everything about reminders: when they fire, whether they may fire now,
- * and playing them out.
+ * Owns everything that interrupts the user: when it fires, whether it may fire
+ * now, and playing it out.
+ *
+ * Two different schedules feed it — interval reminders and clock alarms — and
+ * they meet here, as `Announcement`s, because everything past the moment of
+ * being due is identical. One queue rather than two is what lets an alarm
+ * outrank a reminder instead of the pair of them racing for the companion.
  *
  * Split from the runtime because it is the one subsystem with its own timer,
  * its own queue and its own persistence, and keeping it here leaves the
@@ -49,10 +48,12 @@ export interface ReminderHost {
 export class ReminderCoordinator {
   private readonly events = new EventQueue();
   private readonly scheduler = new ReminderScheduler();
+  private readonly alarms = new AlarmScheduler();
   private timer: ReturnType<typeof setTimeout> | null = null;
   private performance: ReminderPerformance | null = null;
-  private pending: Reminder | null = null;
+  private pending: Announcement | null = null;
   private repository: Pick<ReminderRepository, 'saveAll'> | null = null;
+  private alarmRepository: Pick<AlarmRepository, 'saveAll'> | null = null;
   private paused = false;
   private pausedAt: number | null = null;
   private bubbleText: string | null = null;
@@ -67,6 +68,29 @@ export class ReminderCoordinator {
   adopt(repository: Pick<ReminderRepository, 'saveAll'>, reminders: readonly Reminder[]): void {
     this.repository = repository;
     this.scheduler.restore(reminders);
+    this.scheduleNextCheck();
+  }
+
+  /** Adopts saved alarms and begins scheduling them. */
+  adoptAlarms(repository: Pick<AlarmRepository, 'saveAll'>, alarms: readonly Alarm[]): void {
+    this.alarmRepository = repository;
+    this.alarms.restore(alarms);
+    this.scheduleNextCheck();
+  }
+
+  /**
+   * Takes on reminders and alarms edited in the settings window.
+   *
+   * The settings window writes to the database and says so; this is the
+   * overlay applying what it was told, rather than either window trying to
+   * keep the other's copy up to date.
+   */
+  adoptEdits(options: {
+    readonly reminders?: readonly Reminder[];
+    readonly alarms?: readonly Alarm[];
+  }): void {
+    if (options.reminders) this.scheduler.replaceAll(options.reminders);
+    if (options.alarms) this.alarms.restore(options.alarms);
     this.scheduleNextCheck();
   }
 
@@ -110,8 +134,12 @@ export class ReminderCoordinator {
 
     if (paused) {
       this.pausedAt = Date.now();
-      this.events.clear();
-      log.info('Reminders paused');
+      // Only reminders. An alarm the user set for a particular minute is a
+      // commitment they made, not an interruption the app decided to make, and
+      // its own schedule has already moved past the queued copy — dropping it
+      // would lose it altogether.
+      this.events.clear((event) => event.key.startsWith('reminder:'));
+      log.info('Reminders paused; alarms still ring');
       return;
     }
 
@@ -179,21 +207,24 @@ export class ReminderCoordinator {
   // --- scheduling ---------------------------------------------------------
 
   /**
-   * Waits until the next reminder is due rather than polling.
+   * Waits until the next thing is due rather than polling.
    *
-   * The scheduler caps how long it will sleep, so a suspended machine or a
-   * clock change cannot overshoot by more than half a minute, while an idle
-   * companion still only wakes about twice a minute.
+   * Whichever schedule wants waking first decides the wait. Both cap how long
+   * they will sleep, so a suspended machine or a clock change cannot overshoot
+   * by more than half a minute, while an idle companion still only wakes about
+   * twice a minute.
    */
   private scheduleNextCheck(): void {
     if (this.timer !== null) clearTimeout(this.timer);
+    const wait = Math.min(this.scheduler.sleepMs(), this.alarms.sleepMs());
     this.timer = setTimeout(() => {
       this.queueDue();
       this.scheduleNextCheck();
-    }, this.scheduler.sleepMs());
+    }, wait);
   }
 
   private queueDue(): void {
+    this.queueDueAlarms();
     if (this.paused) return;
 
     const now = Date.now();
@@ -206,30 +237,49 @@ export class ReminderCoordinator {
       log.warn('Could not persist reminder schedule', error);
     });
 
-    for (const reminder of due) {
-      this.events.push({
-        // Keyed by reminder id, so a reminder that could not be shown appears
-        // once when the companion is free again, not once per missed interval.
-        key: `reminder:${reminder.id}`,
-        priority: EventPriority.REMINDER,
-        expiresAt: now + REMINDER_LIFETIME_MS,
-        run: () => this.start(reminder),
-      });
+    for (const reminder of due) this.queue(announcementFor(reminder, now));
+  }
+
+  /**
+   * Alarms, which keep their own counsel.
+   *
+   * Taken whether or not reminders are paused: see `setPaused`.
+   */
+  private queueDueAlarms(): void {
+    const now = Date.now();
+    const due = this.alarms.takeDue();
+    if (due.length === 0) return;
+
+    void this.alarmRepository?.saveAll(this.alarms.all).catch((error: unknown) => {
+      log.warn('Could not persist alarm schedule', error);
+    });
+
+    for (const { alarm, moment } of due) {
+      this.queue(announcementForAlarm(alarm, moment, now));
     }
   }
 
-  private start(reminder: Reminder): void {
-    this.host.prepareForReminder(reminder);
+  private queue(announcement: Announcement): void {
+    this.events.push({
+      key: announcement.key,
+      priority: announcement.priority,
+      expiresAt: announcement.expiresAt,
+      run: () => this.start(announcement),
+    });
+  }
+
+  private start(announcement: Announcement): void {
+    this.host.prepareForReminder(announcement);
     if (this.host.isReadyForReminder?.() === false) {
-      this.pending = reminder;
+      this.pending = announcement;
       return;
     }
-    this.perform(reminder);
+    this.perform(announcement);
   }
 
-  private perform(reminder: Reminder): void {
-    this.sound.play(reminder.sound);
-    this.performance = new ReminderPerformance(reminder, this.host.player, {
+  private perform(announcement: Announcement): void {
+    this.sound.play(announcement.sound);
+    this.performance = new ReminderPerformance(announcement, this.host.player, {
       showBubble: (text) => this.setBubble(text),
       hideBubble: () => this.setBubble(null),
     });

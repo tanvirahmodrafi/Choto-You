@@ -19,7 +19,7 @@ import type { Bounds } from './pixels';
 const log = createLogger('CHARACTER');
 
 /** Pack the app falls back to when the chosen avatar cannot be loaded. */
-export const DEFAULT_AVATAR_ID = 'pip';
+export const DEFAULT_AVATAR_ID = 'rafi';
 
 /**
  * Written by `npm run assets:character`. A webview cannot list a directory over
@@ -307,7 +307,7 @@ export class AvatarRegistry {
       return [
         {
           id: DEFAULT_AVATAR_ID,
-          name: 'Pip',
+          name: 'Choto Rafi',
           origin: 'bundled',
           thumbnailUrl: `/characters/${DEFAULT_AVATAR_ID}/thumbnail.png`,
           slots: [...ANIMATION_SLOTS],

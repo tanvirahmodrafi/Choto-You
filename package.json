@@ -1,7 +1,7 @@
 {
   "name": "choto-you",
   "private": true,
-  "version": "1.0.1",
+  "version": "1.1.0",
   "type": "module",
   "description": "Choto You — a cross-platform companion that lives on your desktop.",
   "scripts": {
@@ -12,7 +12,7 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "assets:character": "node tools/generate-placeholder-character.mjs",
+    "assets:character": "node tools/build-avatar-pack.mjs",
     "assets:icon": "node tools/generate-app-icon.mjs && tauri icon src-tauri/icons/source.png",
     "test": "vitest run",
     "test:watch": "vitest",

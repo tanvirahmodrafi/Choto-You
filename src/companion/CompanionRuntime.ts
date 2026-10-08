@@ -24,13 +24,15 @@ import type { LoadedCharacter } from '@/types/character';
 import { createLogger } from '@/utils/logger';
 import { listenForTrayActions, type TrayAction } from '@/tray/trayEvents';
 import { PositionStore } from '@/database/PositionStore';
+import { AlarmRepository } from '@/database/AlarmRepository';
 import { ReminderRepository } from '@/database/ReminderRepository';
+import { listenForScheduleChanges } from '@/database/scheduleEvents';
 import { SettingsRepository } from '@/database/SettingsRepository';
 import { SettingsStore } from '@/settings/SettingsStore';
 import { DEFAULT_INTERACTION_CONFIG as BASE_INTERACTION } from '@/interaction/types';
 import type { DisplayMode, RoamMode, Settings } from '@/settings/types';
 import { ReminderCoordinator } from '@/reminders/ReminderCoordinator';
-import type { Reminder } from '@/reminders/types';
+import type { Announcement } from '@/reminders/types';
 import { ReminderVisit } from '@/reminders/ReminderVisit';
 import { AvatarHandover, type HandoverStage } from '@/reminders/AvatarHandover';
 import {
@@ -88,6 +90,10 @@ export class CompanionRuntime {
   private positionStore: PositionStore | null = null;
   private unsubscribeSettings: (() => void) | null = null;
   private unlistenTray: (() => void) | null = null;
+  private unlistenSchedules: (() => void) | null = null;
+  /** Held so an edit made in settings can be read back. */
+  private reminderRepository: ReminderRepository | null = null;
+  private alarmRepository: AlarmRepository | null = null;
   private readonly idleMonitor = new IdleMonitor(SLEEP_AFTER_SECONDS);
   private sleeping = false;
   private sleepEnabled = true;
@@ -143,7 +149,7 @@ export class CompanionRuntime {
       {
         player,
         isBusy: () => this.isBusyForReminder(),
-        prepareForReminder: (reminder) => this.prepareForReminder(reminder),
+        prepareForReminder: (announcement) => this.prepareForReminder(announcement),
         isReadyForReminder: () => this.isReadyForReminder(),
         finishReminder: () => this.finishReminder(),
       },
@@ -496,8 +502,17 @@ export class CompanionRuntime {
 
       await this.restorePosition(settingsRepository);
 
-      const reminderRepository = await ReminderRepository.open();
-      this.reminders.adopt(reminderRepository, await reminderRepository.loadOrSeed(Date.now()));
+      this.reminderRepository = await ReminderRepository.open();
+      this.reminders.adopt(
+        this.reminderRepository,
+        await this.reminderRepository.loadOrSeed(Date.now()),
+      );
+
+      this.alarmRepository = await AlarmRepository.open();
+      this.reminders.adoptAlarms(this.alarmRepository, await this.alarmRepository.loadAll());
+
+      this.unlistenSchedules =
+        (await listenForScheduleChanges(() => void this.reloadSchedules())) ?? null;
     } catch (error) {
       log.error('Could not load saved state; continuing with defaults', error);
       this.reminders.startWithout();
@@ -683,13 +698,13 @@ export class CompanionRuntime {
    * While free-roaming, a reminder belonging to a *different* avatar is handed
    * over on foot instead of swapping the artwork where it stands.
    */
-  private prepareForReminder(reminder: Reminder): void {
+  private prepareForReminder(announcement: Announcement): void {
     this.wakeUp();
     this.idleMonitor.markActive();
     this.behavior.interrupt();
 
     if (this.roamMode === 'reminders-only') {
-      if (reminder.avatarId) void this.swapAvatar(reminder.avatarId);
+      if (announcement.avatarId) void this.swapAvatar(announcement.avatarId);
       const cursor = this.interaction.cursorPosition;
       const target = this.settingsStore?.current.display.remindersOnActiveMonitor && cursor
         ? this.displays.displayContaining(cursor)
@@ -702,13 +717,23 @@ export class CompanionRuntime {
       return;
     }
 
-    const visitor = reminder.avatarId;
+    const visitor = announcement.avatarId;
+    // An entrance is wanted either because somebody else is delivering this, or
+    // because the announcement asked for one. The second case runs the same
+    // choreography with the same avatar at both ends of it: the character
+    // leaves, comes back in from the edge, says its piece and returns to where
+    // it was standing.
     if (visitor && visitor !== this.loadedAvatarId) {
       this.beginHandover(visitor);
       return;
     }
-    // Already wearing the right pack: nothing to hand over.
-    if (visitor) void this.swapAvatar(visitor);
+    // Not while the user has asked it to stay put: an entrance means walking
+    // off the screen and back, and "never moves by itself" is a promise about
+    // exactly that. It speaks from where it stands instead.
+    if (announcement.entrance === 'from-edge' && this.roamMode === 'always') {
+      this.beginHandover(this.loadedAvatarId);
+      return;
+    }
   }
 
   /** True once whoever is delivering the reminder is in place to speak. */
@@ -1123,6 +1148,29 @@ export class CompanionRuntime {
     }
   }
 
+  /**
+   * Re-reads reminders and alarms after the settings window changes them.
+   *
+   * Reading from the database rather than trusting the event's payload keeps
+   * one source of truth, and means a reload after a failed write shows what is
+   * actually stored.
+   */
+  private async reloadSchedules(): Promise<void> {
+    try {
+      const [reminders, alarms] = await Promise.all([
+        this.reminderRepository?.loadOrSeed(Date.now()) ?? Promise.resolve(undefined),
+        this.alarmRepository?.loadAll() ?? Promise.resolve(undefined),
+      ]);
+      this.reminders.adoptEdits({
+        ...(reminders ? { reminders } : {}),
+        ...(alarms ? { alarms } : {}),
+      });
+      log.info('Reloaded reminders and alarms after an edit');
+    } catch (error) {
+      log.error('Could not reload the schedules after an edit', error);
+    }
+  }
+
   dispose(): void {
     this.unsubscribe?.();
     this.unsubscribe = null;
@@ -1133,6 +1181,8 @@ export class CompanionRuntime {
     this.unsubscribeSettings = null;
     this.unlistenTray?.();
     this.unlistenTray = null;
+    this.unlistenSchedules?.();
+    this.unlistenSchedules = null;
     this.sound.dispose();
     // One last write so the very last position is not lost on quit.
     void this.positionStore?.flush();

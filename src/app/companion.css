@@ -78,19 +78,22 @@ body {
   position: relative;
   box-sizing: border-box;
   width: 100%;
-  /* Leave room for the tail below the box. */
-  margin-bottom: 7px;
-  padding: 10px 13px;
-  border-radius: 13px;
-  background: #f7fbfb;
-  color: #1b2733;
-  border: 2px solid #1f3e48;
+  /* Leave room for the dots below the box. */
+  margin-bottom: 38px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  /* White, in both colour schemes: the bubble sits on whatever the user's
+     desktop happens to be, not on one of the app's own surfaces, and white
+     with dark text is the one combination that stays readable on both. */
+  background: #ffffff;
+  color: #16212b;
+  border: 1.5px solid rgba(22, 33, 43, 0.18);
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
   font-size: 13px;
   line-height: 1.35;
   /* The bubble is the one part of the overlay that is a readable surface, so
      it carries a shadow even though the window itself has none. */
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
   transition: opacity 140ms ease-out, transform 140ms ease-out;
 }
 
@@ -104,6 +107,42 @@ body {
   transform: scale(1) translateY(0);
 }
 
+/* The trail of dots joining the box to the character. Sizes and offsets step
+   down together, so the three read as one line pointing at the head. */
+.bubble__dots {
+  position: absolute;
+  bottom: 0;
+}
+
+.bubble__dot {
+  position: absolute;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1.5px solid rgba(22, 33, 43, 0.18);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.16);
+}
+
+.bubble__dot:nth-child(1) {
+  width: 10px;
+  height: 10px;
+  bottom: -14px;
+  margin-left: -5px;
+}
+
+.bubble__dot:nth-child(2) {
+  width: 7px;
+  height: 7px;
+  bottom: -26px;
+  margin-left: -3.5px;
+}
+
+.bubble__dot:nth-child(3) {
+  width: 5px;
+  height: 5px;
+  bottom: -36px;
+  margin-left: -2.5px;
+}
+
 .bubble__text {
   margin: 0;
   /* Long custom reminders must not overflow the fixed bubble box. */
@@ -113,28 +152,4 @@ body {
   -webkit-box-orient: vertical;
 }
 
-/* A square rotated 45deg, with two borders showing, makes the tail. */
-.bubble__tail {
-  position: absolute;
-  bottom: -7px;
-  width: 12px;
-  height: 12px;
-  margin-left: -6px;
-  background: #f7fbfb;
-  border-right: 2px solid #1f3e48;
-  border-bottom: 2px solid #1f3e48;
-  transform: rotate(45deg);
-}
 
-@media (prefers-color-scheme: dark) {
-  .bubble__body {
-    background: #20323a;
-    color: #e8f3f1;
-    border-color: #7fd8c8;
-  }
-
-  .bubble__tail {
-    background: #20323a;
-    border-color: #7fd8c8;
-  }
-}
