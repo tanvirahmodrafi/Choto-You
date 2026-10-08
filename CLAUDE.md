@@ -5,8 +5,9 @@ Guidance for Claude Code when working in this repository.
 `AGENTS.md` holds the contributor conventions (style, naming, commit/PR
 expectations) and applies here unchanged. This file covers what the code does,
 how it fits together, and the invariants that are easy to break by accident.
-`README.md` is the long-form rationale — read the relevant section before
-changing window policy, coordinates, reminders, or avatar import.
+`docs/DESIGN.md` is the long-form rationale — read the relevant section before
+changing window policy, coordinates, reminders, or avatar import. `README.md`
+is the user-facing introduction, download and usage guide.
 
 ## What this is
 
@@ -32,6 +33,7 @@ npm run assets:character    # rebuild the bundled avatar from art/avatar-sheet.p
 npm run assets:icon         # rebuild the app icon set from art/app-icon.png
 npm run assets:tray         # rebuild the tray silhouette from the bundled avatar
 npm run assets:sample-sheet # samples/sample-avatar-sheet.png, for testing sheet import
+npm run assets:readme       # rebuild docs/images/ (the README figures) from the avatar
 ```
 
 Before handing work back: `npm test`, `npm run typecheck`, and `cargo fmt`
@@ -116,7 +118,7 @@ earlier `set_always_on_top`. Always-on-top must be asserted **last**.
 **macOS overlay policy.** `ActivationPolicy::Accessory` + a level above
 `NSPopUpMenuWindowLevel` + `canJoinAllApplications` are required *together* for
 the overlay to join other apps' fullscreen Spaces. Changing one in isolation
-produces misleading results (README documents the measurements). The keeper
+produces misleading results (`docs/DESIGN.md` has the measurements). The keeper
 thread restores the level twice a second because Tauri re-applies its own after
 setup. Transparency needs both `macOSPrivateApi: true` and `shadow: false`.
 
@@ -138,7 +140,7 @@ scheduled by completely different rules and meet as `Announcement`s in
 `ReminderCoordinator`, which holds the only queue. Two queues would let them
 race for the companion; one lets an alarm outrank a reminder. Alarms are exempt
 from the reminder pause and are dropped rather than announced when more than
-`ALARM_STALE_MS` late — both deliberate, both documented in the README.
+`ALARM_STALE_MS` late — both deliberate, both documented in `docs/DESIGN.md`.
 
 **SQL stays in `src/database/`.** Everything else works with typed objects.
 Settings are JSON in a key/value table on purpose, so new toggles need no
