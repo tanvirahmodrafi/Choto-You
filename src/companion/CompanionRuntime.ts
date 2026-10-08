@@ -107,6 +107,8 @@ export class CompanionRuntime {
   private chosenAvatarId = DEFAULT_AVATAR_ID;
   /** The avatar revision the loaded artwork belongs to. */
   private loadedAvatarRevision = 0;
+  /** True once settings have been applied, so the first read is not a "change". */
+  private appliedSettingsOnce = false;
   /** Guards against two avatar loads racing; the last request wins. */
   private avatarLoadToken = 0;
   private readonly avatars = new AvatarRegistry();
@@ -267,7 +269,7 @@ export class CompanionRuntime {
     // for a moment on every launch.
     const registry = new AvatarRegistry();
     const wanted = requestedAvatarId ?? DEFAULT_AVATAR_ID;
-    const character = await loadWithFallback(registry, wanted);
+    const { character, avatarId: loadedId } = await loadWithFallback(registry, wanted);
     const { clips } = await loadAnimations(character);
 
     const displays = new DisplayManager();
@@ -320,8 +322,14 @@ export class CompanionRuntime {
       positioner,
       display,
     );
-    runtime.chosenAvatarId = character.manifest.id === wanted ? wanted : DEFAULT_AVATAR_ID;
-    runtime.loadedAvatarId = runtime.chosenAvatarId;
+    // The id the loader actually used, not one inferred from the manifest. A
+    // user pack is addressed as `user:<dir>` but its manifest names the bare
+    // directory, so comparing the two marked every imported avatar as "not the
+    // one we wanted": the first settings read then saw an avatar change and
+    // swapped the pack for the one already on screen, decoding every frame a
+    // second time on each launch.
+    runtime.chosenAvatarId = loadedId;
+    runtime.loadedAvatarId = loadedId;
     runtime.start();
     return runtime;
   }
@@ -350,8 +358,9 @@ export class CompanionRuntime {
 
     const token = ++this.avatarLoadToken;
     let character: LoadedCharacter;
+    let loadedId: string;
     try {
-      character = await loadWithFallback(this.avatars, avatarId);
+      ({ character, avatarId: loadedId } = await loadWithFallback(this.avatars, avatarId));
     } catch (error) {
       log.error(`Could not load avatar "${avatarId}"; keeping the current one`, error);
       return;
@@ -363,6 +372,10 @@ export class CompanionRuntime {
       return;
     }
 
+    // If the requested pack was gone and the default was loaded instead, record
+    // the pack actually on screen. Claiming the requested one would leave the
+    // reminder handover comparing against an avatar that is not being rendered.
+    this.loadedAvatarId = loadedId;
     this.loadedCharacter = character;
     this.player.setClips(clips);
 
@@ -598,6 +611,21 @@ export class CompanionRuntime {
     // A re-import leaves the id alone but replaces the artwork underneath it.
     const artworkChanged = settings.character.avatarRevision !== this.loadedAvatarRevision;
 
+    // The first settings read is not a change. `create` has already loaded the
+    // chosen avatar at whatever revision is current, but the runtime starts
+    // counting from revision zero, so any user who had ever re-imported an
+    // avatar saw this compare unequal on launch and reload the pack already on
+    // screen — decoding every frame a second time before the companion had
+    // finished appearing.
+    if (!this.appliedSettingsOnce) {
+      this.appliedSettingsOnce = true;
+      this.loadedAvatarRevision = settings.character.avatarRevision;
+      if (!avatarChanged) {
+        for (const listener of [...this.settingsListeners]) listener();
+        return;
+      }
+    }
+
     if (avatarChanged || artworkChanged) {
       this.chosenAvatarId = settings.character.characterId;
       this.loadedAvatarRevision = settings.character.avatarRevision;
@@ -633,9 +661,12 @@ export class CompanionRuntime {
   private applySize(): void {
     const manifest = this.loadedCharacter.manifest;
     const base = manifest.defaultScale * this.scaleMultiplier;
+    // The loader already bounds both factors; this keeps their product sane
+    // too, so no combination of a pack and a size setting can produce a
+    // character box the user cannot find or cannot click.
     this.boundaries.setSize({
-      width: Math.round(manifest.frameSize.width * base),
-      height: Math.round(manifest.frameSize.height * base),
+      width: characterExtent(manifest.frameSize.width * base),
+      height: characterExtent(manifest.frameSize.height * base),
     });
     this.movement.revalidate();
   }
@@ -1229,11 +1260,11 @@ function handoverAnimationSpeed(stage: HandoverStage): number {
 async function loadWithFallback(
   registry: AvatarRegistry,
   avatarId: string,
-): Promise<LoadedCharacter> {
+): Promise<{ readonly character: LoadedCharacter; readonly avatarId: string }> {
   const ref = await registry.resolve(avatarId);
   if (ref) {
     try {
-      return await loadCharacter(ref);
+      return { character: await loadCharacter(ref), avatarId };
     } catch (error) {
       log.error(`Avatar "${avatarId}" could not be loaded`, error);
     }
@@ -1245,7 +1276,12 @@ async function loadWithFallback(
   }
 
   log.warn(`Falling back to "${DEFAULT_AVATAR_ID}"`);
-  return loadCharacter(await registry.resolve(DEFAULT_AVATAR_ID) ?? DEFAULT_AVATAR_ID);
+  return {
+    character: await loadCharacter(
+      (await registry.resolve(DEFAULT_AVATAR_ID)) ?? DEFAULT_AVATAR_ID,
+    ),
+    avatarId: DEFAULT_AVATAR_ID,
+  };
 }
 
 /**
@@ -1278,4 +1314,20 @@ async function waitForDisplays(displays: DisplayManager): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
   throw new Error('The operating system reported no displays');
+}
+
+/** Smallest and largest character box worth drawing, in physical pixels. */
+const MIN_CHARACTER_PX = 16;
+const MAX_CHARACTER_PX = 2048;
+
+/**
+ * Keeps the character box to a size that can actually be used.
+ *
+ * Below the minimum there is nothing to aim a cursor at; above the maximum the
+ * overlay covers the screen it is supposed to live on. Both ends would leave
+ * the user unable to reach the companion's own right-click menu.
+ */
+function characterExtent(pixels: number): number {
+  if (!Number.isFinite(pixels)) return MIN_CHARACTER_PX;
+  return Math.round(Math.min(MAX_CHARACTER_PX, Math.max(MIN_CHARACTER_PX, pixels)));
 }

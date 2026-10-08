@@ -87,10 +87,10 @@ creates it once and retries startup up to three times. Subsystems:
 
 ### Backend (`src-tauri/src/`)
 
-`lib.rs` wires plugins (log, sql, autostart), registers commands, and runs the
-setup sequence: legacy data carry-over → startup policy → tray → window
-configuration → the overlay-level keeper thread → settings close handler.
-`main.rs` is a thin wrapper.
+`lib.rs` wires plugins (single-instance, log, sql, autostart), registers
+commands, and runs the setup sequence: legacy data carry-over → startup policy →
+tray → window configuration → the overlay-level keeper thread → settings close
+handler. `main.rs` is a thin wrapper.
 
 - `commands/` — only what a webview cannot do itself: `app_info` and the avatar
   filesystem commands. Window moves and display enumeration use Tauri's own APIs.
@@ -130,10 +130,26 @@ the window bounds.
 can be larger than the character (speech bubbles). Movement, boundaries and
 interaction stay in character coordinates.
 
-**Untrusted reads.** Anything from SQLite or from a cross-window Tauri event is
-validated field by field and clamped — `mergeSettings` is the pattern. One bad
-value must cost its own default, not the whole object; a scale of 500 makes the
-app unrecoverable through its own UI.
+**Untrusted reads.** Anything from SQLite, from a cross-window Tauri event, or
+from an avatar pack's `character.json` is validated field by field and clamped —
+`mergeSettings` is the pattern, and `CharacterLoader` applies it to the manifest.
+One bad value must cost its own default, not the whole object; a scale of 500
+makes the app unrecoverable through its own UI. Type checks are not enough for
+the manifest fields that become window geometry (`frameSize`, `defaultScale`,
+`hitbox`, `movement.*`): a zero there is a companion that cannot be seen or
+clicked, which takes its own right-click menu with it. Paths in a manifest
+(`frames`, `stills`, `thumbnail`) must stay inside the pack — separators are
+allowed, since the bundled pack uses subdirectories, but each segment is
+checked, so `..` cannot address a file the asset scope would then have to
+refuse.
+
+**One instance.** `tauri-plugin-single-instance` is registered first, before
+anything opens a window or the database. Two instances each get their own
+overlay, and because cross-window state travels as Tauri events — which do not
+cross *processes* — neither would hear the other's edits, and whichever wrote
+last would silently overwrite the other in the one shared database. A second
+launch surfaces the settings window instead; it deliberately does not force the
+overlay visible, which would override `companionVisible`.
 
 **Two schedules, one queue.** Interval reminders and clock alarms are
 scheduled by completely different rules and meet as `Announcement`s in
@@ -188,8 +204,11 @@ window ordering, and macOS overlay settings in `platform/macos.rs`.
 Vitest, colocated as `*.test.ts`, no separate config. Name tests after
 observable behaviour. Fake time, animation frames, displays, and anything else
 machine-dependent — multi-monitor behaviour is covered by synthetic layouts
-(including negative origins and mixed DPI) and has **not** been verified against
-real hardware. Add regression coverage for movement, scheduling, or animation
+(including negative origins and mixed DPI). It has also been exercised once on
+real hardware (a 2560x1440 primary at scale 1 with a 1512x982 scale-2 display
+below it at a non-zero origin), but that is one layout on one machine, not
+coverage: treat anything involving hot-plug, rotation or three displays as
+unverified. Add regression coverage for movement, scheduling, or animation
 changes.
 
 ## Logging

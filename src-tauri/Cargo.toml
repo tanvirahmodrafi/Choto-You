@@ -26,6 +26,8 @@ log = "0.4"
 tauri-plugin-log = "2"
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 tauri-plugin-autostart = "2"
+# Keeps a second launch from putting a second companion on the desktop.
+tauri-plugin-single-instance = "2"
 
 # macOS needs direct AppKit access to make the overlay float over other apps'
 # fullscreen Spaces; Tauri exposes no cross-platform API for that.

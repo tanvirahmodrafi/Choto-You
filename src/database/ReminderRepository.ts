@@ -131,8 +131,13 @@ function toReminder(row: ReminderRow): Reminder {
     avatarId: row.avatar_id,
     bubbleSeconds: clamp(row.bubble_seconds, 2, 120),
     ...(row.sound ? { sound: row.sound } : {}),
-    lastTriggered: row.last_triggered,
-    nextTrigger: row.next_trigger,
+    lastTriggered: Number.isFinite(row.last_triggered) ? row.last_triggered : null,
+    // A non-finite trigger compares false against every clock reading, which
+    // makes the scheduler treat the reminder as due on each check. It
+    // recomputes the next one from `now` as it fires, so the cost is a single
+    // surprise reminder rather than a loop — but zero costs nothing at all,
+    // and matches what `AlarmRepository` already does with this column.
+    nextTrigger: Number.isFinite(row.next_trigger) ? row.next_trigger : 0,
   };
 }
 

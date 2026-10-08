@@ -58,13 +58,19 @@ export class BoundaryDetector {
     };
   }
 
+  /**
+   * True when the position needs no correction.
+   *
+   * Defined as "clamping would not move it" rather than as its own set of
+   * comparisons, so it cannot disagree with `clampPosition`. It used to: when
+   * the companion is larger than the work area the horizontal range inverts,
+   * and the straightforward `x <= maxX` test rejected every position including
+   * the one `safePosition` offers — which left the callers that correct an
+   * invalid position re-correcting it on every check, forever.
+   */
   isWithin(position: Vector2): boolean {
-    return (
-      position.x >= this.minX &&
-      position.x <= this.maxX &&
-      position.y >= this.minY &&
-      position.y <= this.groundY
-    );
+    const clamped = this.clampPosition(position);
+    return clamped.x === position.x && clamped.y === position.y;
   }
 
   /** True when the companion is touching the left or right edge. */
@@ -78,8 +84,16 @@ export class BoundaryDetector {
     return position.y >= this.groundY - tolerance;
   }
 
-  /** A guaranteed-safe position, used when a saved or computed one is invalid. */
+  /**
+   * A guaranteed-safe position, used when a saved or computed one is invalid.
+   *
+   * The midpoint goes back through `clampPosition` rather than being returned
+   * as computed: when the companion is larger than the work area `maxX` is
+   * below `minX`, and the midpoint of that inverted range sits outside the
+   * screen — which is exactly the situation this function exists to rescue.
+   */
   safePosition(): Vector2 {
-    return { x: Math.round((this.minX + this.maxX) / 2), y: this.groundY };
+    const midpoint = { x: Math.round((this.minX + this.maxX) / 2), y: this.groundY };
+    return this.clampPosition(midpoint);
   }
 }

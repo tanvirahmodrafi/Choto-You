@@ -18,6 +18,30 @@ pub mod windows;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // Registered first, as the plugin requires: it has to claim the lock
+        // before anything else in the second process starts opening windows or
+        // the database.
+        //
+        // Two instances are worse than they look. Each gets its own overlay, so
+        // the desktop ends up with two companions; worse, cross-window state
+        // travels as Tauri events, which do not cross *processes*, so neither
+        // instance hears the other's settings or schedule edits and whichever
+        // writes last silently overwrites the other's work in the one shared
+        // database. Autostart plus a user clicking the app is enough to cause
+        // it.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            // The app has no Dock icon, so a second launch has nothing to show
+            // for itself. Surfacing settings is the one visible, reversible
+            // answer: it tells the user the companion is already running and
+            // leaves `companionVisible` alone, which showing the overlay would
+            // not.
+            log::info!("[APP] Already running; surfacing settings instead of starting again");
+            if let Some(settings) = windows::settings(app) {
+                let _ = settings.show();
+                let _ = settings.unminimize();
+                let _ = settings.set_focus();
+            }
+        }))
         .plugin(logging::plugin())
         .plugin(database::plugin())
         // Autostart is a login item, which needs no elevated privileges on
