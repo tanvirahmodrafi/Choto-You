@@ -1,0 +1,89 @@
+name: CI
+
+# The checks AGENTS.md asks for before handing work back, plus a compile of the
+# Rust crate on both target platforms. The Windows leg is the point: almost all
+# development happens on macOS, so a break in platform/windows.rs would
+# otherwise stay hidden until release day.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Pushing twice in quick succession cancels the older run instead of queueing.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Typecheck and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
+
+  rustfmt:
+    name: Formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      # Checks formatting only, so no system libraries or frontend build needed.
+      - name: cargo fmt
+        run: cargo fmt --check --manifest-path src-tauri/Cargo.toml
+
+  rust:
+    name: Compile (${{ matrix.label }})
+    runs-on: ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            label: macOS
+          - platform: windows-latest
+            label: Windows
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: ${{ matrix.platform }}
+
+      - run: npm ci
+
+      # tauri-build fails if frontendDist (../dist) is absent, so the frontend
+      # has to be bundled before the crate will even configure.
+      - name: Build frontend
+        run: npm run build
+
+      - name: cargo clippy
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
