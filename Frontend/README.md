@@ -25,15 +25,49 @@ Then open http://localhost:8000.
 
 ## Notes before launch
 
-The website currently loads the mascot sprites from `raw.githubusercontent.com` and fonts from Google Fonts. If you want the landing page fully self-hosted, copy the following files from your public Choto-You repository into `assets/` and update the URLs in HTML/CSS:
+Mascot sprites, the brand thumbnail, and the favicon are served from `assets/`.
+Fonts load from Google Fonts. JavaScript uses GitHub's public Releases API for
+installer links and the download count.
 
-- `docs/images/avatar-sheet.png`
-- `docs/images/thumbnail.png`
-- `docs/images/app-icon.png`
+## Search visibility and hosting
+
+Publish **this `Frontend/` folder** as the public website root. The repository's
+root `npm run build` creates the Tauri desktop interface, not this landing page.
+This site needs no build command. Keep `robots.txt` at the domain root.
+For Vercel, set the project Root Directory to `Frontend`, Framework Preset to
+Other, and serve this directory without a build step. The included `vercel.json`
+permanently redirects `/index.html` to `/`; it does not add a catch-all rewrite,
+so unknown URLs continue to return 404.
+
+The page includes descriptive search metadata, Open Graph and Twitter card
+metadata, and `SoftwareApplication` JSON-LD matching the visible product details.
+Product text, FAQs, and download links are in the original HTML and work without
+JavaScript. No reviews or ratings are claimed in structured data.
+
+The canonical homepage is `https://chotoyou.tanvirahmodrafi.com/`. The canonical
+link, `og:url`, social image URLs, structured data, and sitemap use this domain.
+`robots.txt` allows crawling and points to the absolute sitemap URL. The sitemap
+contains only the homepage; section anchors such as `#faq` belong to that page.
+If the domain changes, update these URLs together. Social cards use the bundled
+256×256 app icon with a square Twitter summary card.
+
+After deploying:
+
+- Check that `/`, `/robots.txt`, `/sitemap.xml`, and the social image return HTTP
+  200 without authentication; missing paths should return HTTP 404.
+- Redirect alternate domains and `/index.html` to the canonical homepage.
+- Check that the host does not add an `X-Robots-Tag: noindex` response header.
+- Verify the domain in Google Search Console, submit the sitemap, and inspect
+  the homepage URL. Validate JSON-LD with Google's Rich Results Test and check
+  social previews. Metadata and sitemaps do not guarantee indexing or rankings.
+
+References: [Google's developer SEO guide](https://developers.google.com/search/docs/fundamentals/get-started-developers)
+and [sitemap guidance](https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap).
 
 The macOS and Windows installers are **unsigned**, and operating systems may warn on the first launch. Include detailed installation guidance in documentation if desired.
 
-The only third-party runtime HTTP request in the JavaScript is to GitHub's public Releases API for current installers. If it is blocked, buttons go to the official latest release page.
+If the GitHub API is blocked, download buttons still go to the official latest
+release page and the download count stays hidden.
 
 ## Inspiration
 
