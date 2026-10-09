@@ -8,14 +8,43 @@ function spriteLoop(el){if(el.dataset.still){const [col,row]=el.dataset.still.sp
   paintSprite(el,setting.row,setting.frames[frame]);}
 if(!window.matchMedia('(prefers-reduced-motion: reduce)').matches){function tick(){spriteNodes.forEach(spriteLoop);requestAnimationFrame(tick)}requestAnimationFrame(tick)}else spriteNodes.forEach(spriteLoop);
 spriteNodes.forEach((node,idx)=>{node.dataset.phase=String(idx*187)});
-// If the GitHub CDN is unavailable, provide a bundled static mascot instead of a blank area.
+// If the default sheet is unavailable, provide a bundled static mascot.
 const sheetProbe=new Image();
 sheetProbe.onerror=()=>{document.querySelectorAll('.sprite').forEach(el=>{el.style.backgroundImage="url('assets/mascot-fallback.svg')";el.style.backgroundSize='contain';el.style.backgroundPosition='center';});};
-sheetProbe.src='https://raw.githubusercontent.com/tanvirahmodrafi/Choto-You/main/docs/images/avatar-sheet.png';
+sheetProbe.src='assets/rafi-sprite-sheet.png';
 const moodButtons=document.querySelectorAll('.mood');const demoChar=document.getElementById('demo-character');const demoSpeech=document.getElementById('demo-speech');const expressions={idle:'hiya, human! ♡',run:'got places to be!! ⚡',drink:'water break! 💧',sleep:'five more minutes... zzz',cheer:'YOU DID IT!! 🎉'};
-function setMood(mood){demoChar.dataset.animation=mood;demoSpeech.textContent=expressions[mood];moodButtons.forEach(btn=>{const active=btn.dataset.mood===mood;btn.classList.toggle('active',active);btn.setAttribute('aria-pressed',String(active))});demoSpeech.style.transform=`rotate(${mood==='sleep'?-7:8}deg)`}
+const demoPerson = document.getElementById('demo-person');
+const demoPeople = {
+  rafi: { sheet: 'assets/rafi-sprite-sheet.png', name: 'Rafi', messages: expressions },
+  ma: {
+    sheet: 'assets/ma-sprite-sheet.png', name: 'Ma',
+    messages: { idle: 'Kheye nao, baba! ♡', run: 'Ektu hete nao! ♡', drink: 'Pani kheye nao! 💧', sleep: 'Onek raat, ghumiye poro! ♡', cheer: 'Shabash, baba! ♡' },
+  },
+  baba: {
+    sheet: 'assets/baba-sprite-sheet.png', name: 'Baba',
+    messages: { idle: 'Ektu break nao, baba! ♡', run: 'Cholo, ektu hati! ♡', drink: 'Pani khete bhulo na! 💧', sleep: 'Raat hoyeche, ghumiye poro! ♡', cheer: 'Shabash! Tomake niye gorbito! ♡' },
+  },
+  'choto-bon': {
+    sheet: 'assets/choto-bon-sprite-sheet.png', name: 'Siblings',
+    messages: { idle: 'Bhaiya, ektu break nao! ♡', run: 'Cholo, kheli! ♡', drink: 'Bhaiya, pani kheye nao! 💧', sleep: 'Good night, bhaiya! ♡', cheer: 'Yay! Tumi perecho! ♡' },
+  },
+  gf: {
+    sheet: 'assets/gf-sprite-sheet.png', name: 'GF',
+    messages: { idle: 'Get ready for our date! ♡', run: 'Cholo, berate jai! ♡', drink: 'Pani kheye nao, please! 💧', sleep: 'Good night, sweet dreams! ♡', cheer: 'So proud of you! ♡' },
+  },
+};
+function setMood(mood){demoChar.dataset.animation=mood;demoSpeech.textContent=demoPeople[demoPerson.value].messages[mood];moodButtons.forEach(btn=>{const active=btn.dataset.mood===mood;btn.classList.toggle('active',active);btn.setAttribute('aria-pressed',String(active))});spriteLoop(demoChar);demoSpeech.style.transform=`rotate(${mood==='sleep'?-7:8}deg)`}
 moodButtons.forEach(btn=>btn.addEventListener('click',()=>setMood(btn.dataset.mood)));
-setMood('idle');
+function selectDemoPerson() {
+  const person = demoPeople[demoPerson.value];
+  demoChar.style.backgroundImage = `url('${person.sheet}')`;
+  demoChar.style.backgroundSize = '800% 400%';
+  demoChar.setAttribute('aria-label', `${person.name}, interactive animated companion`);
+  setMood(demoChar.dataset.animation || 'idle');
+  spriteLoop(demoChar);
+}
+demoPerson.addEventListener('change', selectDemoPerson);
+selectDemoPerson();
 // Drag within the live playground; never drag the real desktop companion from the page.
 const screen=document.getElementById('demo-screen');let drag=null;
 demoChar.addEventListener('pointerdown',e=>{if(e.button!==0)return;const rect=demoChar.getBoundingClientRect();drag={pointer:e.pointerId,shiftX:e.clientX-rect.left,shiftY:e.clientY-rect.top};demoChar.setPointerCapture(e.pointerId);e.preventDefault()});
