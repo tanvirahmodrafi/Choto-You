@@ -29,7 +29,7 @@ const demoPeople = {
     messages: { idle: 'Bhaiya, ektu break nao! ♡', run: 'Cholo, kheli! ♡', drink: 'Bhaiya, pani kheye nao! 💧', sleep: 'Good night, bhaiya! ♡', cheer: 'Yay! Tumi perecho! ♡' },
   },
   gf: {
-    sheet: 'assets/gf-sprite-sheet.png', name: 'GF',
+    sheet: 'assets/gf-sprite-sheet.png', name: 'Partner',
     messages: { idle: 'Get ready for our date! ♡', run: 'Cholo, berate jai! ♡', drink: 'Pani kheye nao, please! 💧', sleep: 'Good night, sweet dreams! ♡', cheer: 'So proud of you! ♡' },
   },
 };
