@@ -54,5 +54,17 @@ demoChar.addEventListener('pointerup',()=>{drag=null;demoSpeech.textContent='wee
 // If network/API access is unavailable, buttons safely lead to the official latest release page.
 async function resolveDownloads(){try{const response=await fetch('https://api.github.com/repos/tanvirahmodrafi/Choto-You/releases/latest',{headers:{Accept:'application/vnd.github+json'}});if(!response.ok)throw new Error('release unavailable');const data=await response.json();const assets=data.assets||[];const mac=assets.find(a=>/\.dmg$/i.test(a.name)&&/universal/i.test(a.name))||assets.find(a=>/\.dmg$/i.test(a.name));const win=assets.find(a=>/-setup\.exe$/i.test(a.name))||assets.find(a=>/\.exe$/i.test(a.name));for(const link of document.querySelectorAll('[data-download="mac"]'))if(mac)link.href=mac.browser_download_url;for(const link of document.querySelectorAll('[data-download="windows"]'))if(win)link.href=win.browser_download_url;const note=document.getElementById('release-note');if(data.tag_name)note.textContent=`Latest official release ${data.tag_name} · macOS & Windows · No account required`; }catch(err){/* GitHub releases page remains usable */}}
 resolveDownloads();
+
+// Total installer downloads, straight from GitHub's own release counters.
+// Counts .dmg/.exe/.msi only, so updater tarballs and signature files don't inflate it.
+// Stays hidden if the API is unreachable or rate-limited — no number beats a wrong one.
+async function showDownloadCount(){const slot=document.getElementById('download-count');if(!slot)return;
+  try{const response=await fetch('https://api.github.com/repos/tanvirahmodrafi/Choto-You/releases?per_page=100',{headers:{Accept:'application/vnd.github+json'}});
+    if(!response.ok)throw new Error('releases unavailable');const releases=await response.json();if(!Array.isArray(releases))throw new Error('unexpected payload');
+    const total=releases.filter(r=>!r.draft).reduce((sum,release)=>sum+(release.assets||[]).filter(a=>/\.(dmg|exe|msi)$/i.test(a.name)).reduce((n,a)=>n+(a.download_count||0),0),0);
+    if(!total)return;
+    slot.innerHTML=`♡ <b>${total.toLocaleString()}</b> ${total===1?'download':'downloads'} and counting`;slot.hidden=false;
+  }catch(err){/* the line simply stays hidden */}}
+showDownloadCount();
 const menuButton=document.querySelector('.menu-toggle');const mobileMenu=document.querySelector('.mobile-menu');menuButton.addEventListener('click',()=>{const open=mobileMenu.classList.toggle('open');menuButton.setAttribute('aria-expanded',String(open));menuButton.setAttribute('aria-label',open?'Close menu':'Open menu')});mobileMenu.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{mobileMenu.classList.remove('open');menuButton.setAttribute('aria-expanded','false')}));
 const backButton=document.querySelector('.back-to-top');window.addEventListener('scroll',()=>backButton.classList.toggle('visible',window.scrollY>800),{passive:true});backButton.addEventListener('click',()=>window.scrollTo({top:0,behavior:'smooth'}));document.getElementById('year').textContent=String(new Date().getFullYear());
