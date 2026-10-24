@@ -125,13 +125,21 @@ export function Button({
   children,
   onClick,
   tone = 'normal',
+  disabled = false,
 }: {
   readonly children: ReactNode;
   readonly onClick: () => void;
-  readonly tone?: 'normal' | 'danger';
+  readonly tone?: 'normal' | 'primary' | 'danger';
+  readonly disabled?: boolean;
 }) {
   return (
-    <button className="button" data-tone={tone} type="button" onClick={onClick}>
+    <button
+      className="button"
+      data-tone={tone}
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+    >
       {children}
     </button>
   );

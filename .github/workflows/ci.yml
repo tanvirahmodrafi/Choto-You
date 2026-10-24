@@ -1,9 +1,9 @@
 name: CI
 
 # The checks AGENTS.md asks for before handing work back, plus a compile of the
-# Rust crate on both target platforms. The Windows leg is the point: almost all
-# development happens on macOS, so a break in platform/windows.rs would
-# otherwise stay hidden until release day.
+# Rust crate on every supported desktop platform. Platform-specific window code
+# is compiled in its native environment so a broken target cannot hide until
+# release day.
 
 on:
   push:
@@ -61,6 +61,8 @@ jobs:
             label: macOS
           - platform: windows-latest
             label: Windows
+          - platform: ubuntu-22.04
+            label: Linux
     steps:
       - uses: actions/checkout@v4
 
@@ -77,6 +79,12 @@ jobs:
         with:
           workspaces: src-tauri -> target
           key: ${{ matrix.platform }}
+
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev
 
       - run: npm ci
 

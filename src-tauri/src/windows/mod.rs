@@ -21,17 +21,34 @@ pub fn settings(app: &AppHandle) -> Option<WebviewWindow> {
 
 /// Applies the overlay behaviour that has to be set at runtime.
 pub fn configure_companion(window: &WebviewWindow) -> tauri::Result<()> {
-    // The overlay must never participate in normal window cycling.
-    window.set_skip_taskbar(true)?;
+    #[cfg(target_os = "linux")]
+    {
+        // These are window-manager hints on Linux rather than guarantees.
+        // In particular, some Wayland compositors reject workspace and layer
+        // requests. Keep starting the app when that happens: a usable overlay
+        // on the current workspace is better than aborting setup entirely.
+        apply_linux_hint("skip taskbar", window.set_skip_taskbar(true));
+        apply_linux_hint(
+            "visible on all workspaces",
+            window.set_visible_on_all_workspaces(true),
+        );
+        apply_linux_hint("always on top", window.set_always_on_top(true));
+    }
 
-    // Keep the companion present when the user switches desktops/spaces,
-    // otherwise it vanishes the moment they move to another Space on macOS.
-    window.set_visible_on_all_workspaces(true)?;
+    #[cfg(not(target_os = "linux"))]
+    {
+        // The overlay must never participate in normal window cycling.
+        window.set_skip_taskbar(true)?;
 
-    // Always-on-top first: on macOS it sets the window level, and the platform
-    // hook below raises that level further. Doing it the other way round would
-    // undo the raise.
-    window.set_always_on_top(true)?;
+        // Keep the companion present when the user switches desktops/spaces,
+        // otherwise it vanishes the moment they move to another Space on macOS.
+        window.set_visible_on_all_workspaces(true)?;
+
+        // Always-on-top first: on macOS it sets the window level, and the platform
+        // hook below raises that level further. Doing it the other way round would
+        // undo the raise.
+        window.set_always_on_top(true)?;
+    }
 
     // Raises the window above fullscreen Spaces and lets it join every Space.
     // It also performs the first show only after the native policy is ready;
@@ -47,4 +64,11 @@ pub fn configure_companion(window: &WebviewWindow) -> tauri::Result<()> {
         window.scale_factor()
     );
     Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn apply_linux_hint(name: &str, result: tauri::Result<()>) {
+    if let Err(error) = result {
+        log::warn!("[WINDOW] Linux window manager rejected {name} hint: {error}");
+    }
 }

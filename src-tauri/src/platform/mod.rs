@@ -3,6 +3,9 @@
 //! All `#[cfg(target_os = ...)]` code for the application lives under this
 //! module so the rest of the crate stays portable.
 
+#[cfg(target_os = "linux")]
+mod linux;
+
 #[cfg(target_os = "macos")]
 mod macos;
 
@@ -23,7 +26,10 @@ pub fn apply_startup_policy(app: &AppHandle) {
     #[cfg(target_os = "windows")]
     windows::apply_startup_policy(app);
 
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    #[cfg(target_os = "linux")]
+    linux::apply_startup_policy(app);
+
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
     {
         let _ = app;
         log::warn!("[APP] Unsupported platform; running with default policy");
@@ -42,7 +48,10 @@ pub fn make_floating_panel(window: &WebviewWindow) {
     #[cfg(target_os = "windows")]
     windows::make_floating_panel(window);
 
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    #[cfg(target_os = "linux")]
+    linux::make_floating_panel(window);
+
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
     if let Err(error) = window.show() {
         log::error!("[WINDOW] Could not show the companion: {error}");
     }

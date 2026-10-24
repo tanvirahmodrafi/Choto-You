@@ -8,7 +8,7 @@
 screens, naps when you leave, and taps you on the shoulder when it is time to
 drink water.**
 
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-111827)](#download)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-111827)](#download)
 [![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-24C8DB)](https://v2.tauri.app/)
 [![Frontend](https://img.shields.io/badge/React%2019%20%2B%20TypeScript-3178C6)](https://react.dev/)
 [![Backend](https://img.shields.io/badge/Rust-DEA584)](https://www.rust-lang.org/)
@@ -75,9 +75,9 @@ Installers for every release are on the releases page:
 | **macOS** (Intel + Apple Silicon) | `Choto You_<version>_universal.dmg` | One disk image for both architectures |
 | **Windows 10/11** (x64) | `Choto You_<version>_x64-setup.exe` | The recommended installer |
 | **Windows 10/11** (x64) | `Choto You_<version>_x64_en-US.msi` | For deployment through group policy or an MDM |
-
-There is no Linux build. The overlay depends on per-platform window code that
-exists for macOS and Windows only.
+| **Linux** (x64) | `Choto You_<version>_amd64.AppImage` | Portable; mark executable and run |
+| **Debian / Ubuntu** (x64) | `Choto You_<version>_amd64.deb` | Native package |
+| **Fedora / RHEL** (x64) | `Choto You-<version>-1.x86_64.rpm` | Native package |
 
 ### Installing on macOS
 
@@ -101,6 +101,19 @@ exists for macOS and Windows only.
 3. The app appears in the notification area — click the overflow arrow if
    Windows has tucked it away.
 
+Opening Choto You again while it is in the notification area reuses the running
+app and opens its Settings window. It never starts a second character.
+
+### Installing on Linux
+
+- Install the `.deb` or `.rpm` with your distribution's package manager; or
+- download the `.AppImage`, run `chmod +x Choto\ You_*.AppImage`, and open it.
+
+The tray icon may appear under a Status Notifier extension on desktops that do
+not show app indicators by default. X11 provides the most consistent floating
+overlay behaviour; some Wayland compositors restrict global positioning and
+always-on-top hints.
+
 ### Updating and uninstalling
 
 There is no auto-updater, on purpose: an app that makes no network calls at all
@@ -109,8 +122,9 @@ the old one — your settings, reminders and avatars are kept.
 
 To remove it: turn off **Start with computer** in Settings → General, quit from
 the tray, then drag the app to the Bin (macOS) or uninstall it from
-Settings → Apps (Windows). Your data directory is left behind; delete it too if
-you want a clean slate — see [Your data](#your-data-never-leaves-your-machine).
+Settings → Apps (Windows), or remove its package on Linux. Your data directory
+is left behind; delete it too if you want a clean slate — see
+[Your data](#your-data-never-leaves-your-machine).
 
 ---
 
@@ -277,13 +291,15 @@ position — is one SQLite file plus a folder of images on your own disk:
 | --- | --- |
 | **macOS** | `~/Library/Application Support/com.chotoyou.app/` |
 | **Windows** | `%APPDATA%\com.chotoyou.app\` |
+| **Linux** | `~/.local/share/com.chotoyou.app/` |
 
 Copy that directory to back everything up; delete it to reset the app to a
 first launch.
 
 Logs — plain text, tagged by subsystem — are at
 `~/Library/Logs/com.chotoyou.app/` on macOS and
-`%LOCALAPPDATA%\com.chotoyou.app\logs\` on Windows.
+`%LOCALAPPDATA%\com.chotoyou.app\logs\` on Windows, and
+`~/.local/share/com.chotoyou.app/logs/` on Linux.
 
 ---
 
@@ -343,6 +359,7 @@ default rather than preventing startup.
 | Rust | stable, via `rustup` | `rustup toolchain install stable` |
 | macOS | Xcode command line tools | `xcode-select --install` |
 | Windows | MSVC build tools + WebView2 | WebView2 ships with Windows 11 and current Windows 10 |
+| Linux | WebKitGTK 4.1 + app indicator development packages | See Tauri's distribution-specific command below |
 
 Tauri's [prerequisites page](https://v2.tauri.app/start/prerequisites/) lists
 the system packages per platform if the build fails to configure.
@@ -376,8 +393,9 @@ rustup target add aarch64-apple-darwin x86_64-apple-darwin
 npm run tauri -- build --target universal-apple-darwin
 ```
 
-Cross-compiling between macOS and Windows is not supported; each platform's
-installers are built on that platform, which is what the release workflow does.
+Cross-compiling between macOS, Windows and Linux is not supported; each
+platform's installers are built on that platform, which is what the release
+workflow does.
 
 ### Checks
 
@@ -388,7 +406,7 @@ cargo fmt --check --manifest-path src-tauri/Cargo.toml
 ```
 
 CI runs all three on every push, and additionally compiles the Rust crate on
-both macOS and Windows with `clippy -D warnings`.
+macOS, Windows and Linux with `clippy -D warnings`.
 
 ### All the scripts
 
@@ -429,7 +447,7 @@ src/
 src-tauri/src/
   commands/    the frontend-facing command surface
   windows/     window creation and runtime configuration
-  platform/    every line of macOS/Windows divergence
+  platform/    every line of macOS/Windows/Linux divergence
 ```
 
 **[`docs/DESIGN.md`](docs/DESIGN.md)** is the long-form version: why the window
@@ -454,6 +472,9 @@ Everything described above is implemented and working. The honest caveats:
 - **Windows is built and type-checked in CI on every push**, but is far less
   exercised by hand than macOS. Releases are left as drafts until the Windows
   installer has been smoke-tested.
+- **Linux is built on Ubuntu 22.04 in CI.** X11 window managers generally honour
+  the overlay hints; Wayland compositors may limit global placement or
+  always-on-top behaviour.
 - **Builds are unsigned.** Signing needs a paid Apple Developer account and a
   Windows code-signing certificate; neither is set up, which is why the first
   launch needs a click-through on both platforms.

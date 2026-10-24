@@ -4,7 +4,7 @@
 //!   commands/ — the frontend-facing API surface
 //!   windows/  — creation and runtime configuration of the app's windows
 //!   displays/ — monitor enumeration and topology (Phase 4)
-//!   platform/ — anything that differs between Windows and macOS
+//!   platform/ — anything that differs between Linux, Windows and macOS
 
 pub mod commands;
 pub mod database;

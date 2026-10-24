@@ -1,28 +1,29 @@
-/*
- * Settings window styling.
- *
- * Deliberately plain: this is a utility window the user opens occasionally,
- * and a quiet interface keeps the companion itself the interesting part.
- */
-
 :root {
-  --bg: #f4f6f7;
+  --bg: #f5f8f7;
   --panel: #ffffff;
-  --text: #1b2733;
-  --muted: #5d6c78;
-  --line: #dde3e7;
-  --accent: #2e8b84;
-  --danger: #b4453c;
+  --raised: #edf7f5;
+  --active: #dff1ed;
+  --text: #17211f;
+  --muted: #5d6966;
+  --line: #e1e8e6;
+  --control: #cbd6d3;
+  --accent: #217c73;
+  --accent-ink: #14534d;
+  --danger: #a43c35;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #171c21;
-    --panel: #1f262c;
+    --bg: #141918;
+    --panel: #1d2422;
+    --raised: #22312e;
+    --active: #29423d;
     --text: #e8eef1;
-    --muted: #9aa8b3;
-    --line: #2d363d;
+    --muted: #aab5b2;
+    --line: #2b3532;
+    --control: #46534f;
     --accent: #6bd6c7;
+    --accent-ink: #b9f0e8;
     --danger: #e0756a;
   }
 }
@@ -36,18 +37,20 @@ body,
 
 body {
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text);
   background: var(--bg);
+  line-height: 1.45;
 }
 
 .settings {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
   height: 100%;
 }
 
 .settings--message {
+  display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
@@ -59,15 +62,51 @@ body {
   color: var(--muted);
 }
 
-/* --- tabs --------------------------------------------------------------- */
+/* --- shell -------------------------------------------------------------- */
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 22px 14px 16px;
+  background: var(--bg);
+  border-right: 1px solid var(--line);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px 24px;
+}
+
+.brand__mark {
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+}
+
+.brand div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.brand strong {
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.brand span,
+.sidebar__note {
+  color: var(--muted);
+  font-size: 12px;
+}
 
 .tabs {
   display: flex;
-  gap: 2px;
-  padding: 10px 12px 0;
-  border-bottom: 1px solid var(--line);
-  /* The window is draggable by its empty chrome area. */
-  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 3px;
 }
 
 .tabs__tab {
@@ -76,9 +115,11 @@ body {
   background: transparent;
   color: var(--muted);
   font: inherit;
-  padding: 7px 12px;
-  border-radius: 7px 7px 0 0;
+  min-height: 36px;
+  padding: 7px 10px;
+  border-radius: 8px;
   cursor: pointer;
+  text-align: left;
 }
 
 .tabs__tab:hover {
@@ -86,32 +127,56 @@ body {
 }
 
 .tabs__tab[data-active='true'] {
-  color: var(--text);
-  background: var(--panel);
-  box-shadow: inset 0 -2px 0 var(--accent);
+  color: var(--accent-ink);
+  background: var(--active);
+  font-weight: 600;
+}
+
+.sidebar__note {
+  margin: auto 8px 0;
+  line-height: 1.5;
 }
 
 /* --- panels ------------------------------------------------------------- */
 
 .panel {
-  flex: 1 1 auto;
   overflow-y: auto;
-  padding: 16px 18px 24px;
+  padding: 30px clamp(22px, 4vw, 42px) 40px;
+}
+
+.panel__header {
+  max-width: 860px;
+  margin: 0 auto 26px;
+}
+
+.panel__header h1 {
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.panel__header p {
+  margin: 7px 0 0;
+  color: var(--muted);
+}
+
+.section {
+  max-width: 860px;
+  margin: 0 auto;
 }
 
 .section__title {
-  margin: 0 0 10px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
 }
 
 .section__body {
   background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 16px;
   overflow: hidden;
 }
 
@@ -120,7 +185,8 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 11px 14px;
+  min-height: 42px;
+  padding: 13px 16px;
   border-bottom: 1px solid var(--line);
 }
 
@@ -136,7 +202,7 @@ body {
 }
 
 .row__label {
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .row__hint {
@@ -152,10 +218,6 @@ body {
   flex: 0 0 auto;
 }
 
-.reminder + .reminder {
-  border-top: 2px solid var(--line);
-}
-
 /* --- controls ----------------------------------------------------------- */
 
 .toggle input {
@@ -167,22 +229,23 @@ body {
 
 .toggle__track {
   display: inline-block;
-  width: 38px;
-  height: 22px;
-  border-radius: 11px;
-  background: var(--line);
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--control);
   transition: background 120ms ease;
   cursor: pointer;
 }
 
 .toggle__thumb {
   display: block;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   margin: 2px;
   border-radius: 50%;
   background: #fff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  box-sizing: border-box;
   transition: transform 120ms ease;
 }
 
@@ -191,7 +254,7 @@ body {
 }
 
 .toggle input:checked + .toggle__track .toggle__thumb {
-  transform: translateX(16px);
+  transform: translateX(14px);
 }
 
 .toggle input:focus-visible + .toggle__track {
@@ -220,19 +283,21 @@ body {
 .choice {
   font: inherit;
   color: var(--text);
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  padding: 5px 8px;
+  min-height: 36px;
+  background: var(--panel);
+  border: 1px solid var(--control);
+  border-radius: 9px;
+  padding: 6px 10px;
 }
 
 .button {
   font: inherit;
   color: var(--text);
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  padding: 5px 11px;
+  min-height: 36px;
+  background: var(--panel);
+  border: 1px solid var(--control);
+  border-radius: 8px;
+  padding: 7px 13px;
   cursor: pointer;
 }
 
@@ -240,20 +305,36 @@ body {
   border-color: var(--accent);
 }
 
-.button[data-tone='danger'] {
+.button[data-tone='primary'] {
   color: #fff;
-  background: var(--danger);
-  border-color: var(--danger);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.button[data-tone='danger'] {
+  color: var(--danger);
+  background: transparent;
+  border-color: transparent;
+}
+
+.button:disabled {
+  color: var(--muted);
+  background: var(--line);
+  border-color: var(--line);
+  cursor: default;
+  opacity: 0.75;
 }
 
 .text-input {
   font: inherit;
   color: var(--text);
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  padding: 5px 8px;
-  width: 220px;
+  min-height: 38px;
+  box-sizing: border-box;
+  background: var(--panel);
+  border: 1px solid var(--control);
+  border-radius: 9px;
+  padding: 7px 10px;
+  width: min(280px, 42vw);
 }
 
 .text-input:focus {
@@ -264,6 +345,145 @@ body {
 .confirm {
   display: flex;
   gap: 8px;
+}
+
+.choice:focus-visible,
+.button:focus-visible,
+.tabs__tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* --- reminder and alarm editors ---------------------------------------- */
+
+.schedule-editor {
+  margin: 14px;
+  padding: 0 16px 14px;
+  background: var(--bg);
+  border: 1px solid transparent;
+  border-radius: 12px;
+}
+
+.schedule-editor[data-dirty='true'] {
+  border-color: color-mix(in srgb, var(--accent) 32%, transparent);
+}
+
+.schedule-editor__heading,
+.collection-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.schedule-editor__heading {
+  min-height: 62px;
+}
+
+.schedule-editor__heading > div,
+.collection-action > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.schedule-editor__heading strong,
+.collection-action strong {
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.schedule-editor__heading span,
+.collection-action span,
+.section-note,
+.schedule-editor__message {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.schedule-editor .row {
+  padding-inline: 0;
+}
+
+.schedule-editor__message {
+  margin: 0;
+  padding: 0 0 13px;
+  border-bottom: 1px solid var(--line);
+}
+
+.schedule-editor__actions,
+.schedule-editor__commit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.schedule-editor__actions {
+  justify-content: space-between;
+  padding-top: 14px;
+}
+
+.collection-action {
+  margin: 14px;
+  padding: 15px 16px;
+  background: var(--raised);
+  border-radius: 12px;
+}
+
+.section-note {
+  margin: 4px 16px 18px;
+}
+
+@media (max-width: 680px) {
+  .settings {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .sidebar {
+    display: block;
+    padding: 10px 14px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .brand,
+  .sidebar__note {
+    display: none;
+  }
+
+  .tabs {
+    flex-direction: row;
+    overflow-x: auto;
+  }
+
+  .tabs__tab {
+    flex: 0 0 auto;
+  }
+
+  .panel {
+    padding: 22px 16px 32px;
+  }
+
+  .row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .row__control,
+  .text-input,
+  .choice {
+    width: 100%;
+  }
+
+  .slider {
+    width: 100%;
+  }
+
+  .slider input {
+    flex: 1;
+  }
 }
 
 /* A row whose control is too wide to sit beside its label. */
@@ -316,8 +536,7 @@ body {
 }
 
 .avatar[data-selected='true'] {
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent);
+  border: 2px solid var(--accent);
 }
 
 .avatar__frame,
@@ -560,19 +779,13 @@ body {
   color: var(--muted);
 }
 
-/* A checkerboard makes it obvious whether the background really came out
-   transparent, which is the single most common thing to go wrong. */
+/* A distinct flat field keeps transparent art legible without adding a
+   decorative pattern to every preview cell. */
 .import__cell img {
   width: 100%;
   height: 64px;
   object-fit: contain;
-  background-image:
-    linear-gradient(45deg, var(--line) 25%, transparent 25%),
-    linear-gradient(-45deg, var(--line) 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, var(--line) 75%),
-    linear-gradient(-45deg, transparent 75%, var(--line) 75%);
-  background-size: 10px 10px;
-  background-position: 0 0, 0 5px, 5px -5px, -5px 0;
+  background: var(--raised);
   border-radius: 4px;
 }
 

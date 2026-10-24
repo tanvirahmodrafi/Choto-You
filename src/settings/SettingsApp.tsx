@@ -115,20 +115,19 @@ export function SettingsApp() {
   }, []);
 
   const updateReminder = useCallback(
-    (reminder: Reminder) => {
+    async (reminder: Reminder): Promise<void> => {
+      await saved(loaded?.reminderRepository.save(reminder));
       setReminders((current) =>
         current.map((candidate) => (candidate.id === reminder.id ? reminder : candidate)),
       );
-      void saved(loaded?.reminderRepository.save(reminder));
     },
     [loaded, saved],
   );
 
-  const addReminder = useCallback(() => {
-    const reminder = createCustomReminder(Date.now());
+  const addReminder = useCallback(async (reminder: Reminder): Promise<void> => {
+    await saved(loaded?.reminderRepository.save(reminder, reminders.length));
     setReminders((current) => [...current, reminder]);
-    void saved(loaded?.reminderRepository.save(reminder, 100));
-  }, [loaded, saved]);
+  }, [loaded, reminders.length, saved]);
 
   const removeReminder = useCallback(
     (id: string) => {
@@ -139,20 +138,19 @@ export function SettingsApp() {
   );
 
   const updateAlarm = useCallback(
-    (alarm: Alarm) => {
+    async (alarm: Alarm): Promise<void> => {
+      await saved(loaded?.alarmRepository.save(alarm));
       setAlarms((current) =>
         current.map((candidate) => (candidate.id === alarm.id ? alarm : candidate)),
       );
-      void saved(loaded?.alarmRepository.save(alarm));
     },
     [loaded, saved],
   );
 
-  const addAlarm = useCallback(() => {
-    const alarm = createAlarm(Date.now());
+  const addAlarm = useCallback(async (alarm: Alarm): Promise<void> => {
+    await saved(loaded?.alarmRepository.save(alarm, alarms.length));
     setAlarms((current) => [...current, alarm]);
-    void saved(loaded?.alarmRepository.save(alarm, 100));
-  }, [loaded, saved]);
+  }, [alarms.length, loaded, saved]);
 
   const removeAlarm = useCallback(
     (id: string) => {
@@ -182,21 +180,35 @@ export function SettingsApp() {
 
   return (
     <main className="settings">
-      <nav className="tabs" aria-label="Settings sections">
-        {TABS.map((entry) => (
-          <button
-            key={entry.id}
-            type="button"
-            className="tabs__tab"
-            data-active={tab === entry.id ? 'true' : 'false'}
-            onClick={() => setTab(entry.id)}
-          >
-            {entry.label}
-          </button>
-        ))}
-      </nav>
+      <aside className="sidebar">
+        <div className="brand">
+          <img className="brand__mark" src="/characters/rafi/thumbnail.png" alt="" />
+          <div>
+            <strong>Choto You</strong>
+            <span>Companion settings</span>
+          </div>
+        </div>
+        <nav className="tabs" aria-label="Settings sections">
+          {TABS.map((entry) => (
+            <button
+              key={entry.id}
+              type="button"
+              className="tabs__tab"
+              data-active={tab === entry.id ? 'true' : 'false'}
+              onClick={() => setTab(entry.id)}
+            >
+              {entry.label}
+            </button>
+          ))}
+        </nav>
+        <p className="sidebar__note">Changes in most sections apply immediately. Reminders and alarms wait for Save.</p>
+      </aside>
 
       <div className="panel">
+        <header className="panel__header">
+          <h1>{TABS.find((entry) => entry.id === tab)?.label}</h1>
+          <p>{TAB_DESCRIPTIONS[tab]}</p>
+        </header>
         {tab === 'general' ? <GeneralPanel settings={settings} update={update} /> : null}
         {tab === 'character' ? <CharacterPanel settings={settings} update={update} /> : null}
         {tab === 'display' ? (
@@ -224,6 +236,16 @@ export function SettingsApp() {
     </main>
   );
 }
+
+const TAB_DESCRIPTIONS: Readonly<Record<Tab, string>> = {
+  general: 'Choose how Choto You starts, sounds, and stays visible.',
+  character: 'Pick who lives on your desktop and how they move.',
+  display: 'Decide which screen your companion calls home.',
+  reminders: 'Set the gentle nudges your companion brings throughout the day.',
+  alarms: 'Choose exact moments when your companion should come find you.',
+  behavior: 'Shape how often your companion wanders and reacts.',
+  advanced: 'Tune performance, diagnostics, and reset options.',
+};
 
 type UpdateFn = (patch: Parameters<SettingsStore['update']>[0]) => void;
 
@@ -479,118 +501,176 @@ function RemindersPanel({
   onRemove,
 }: {
   reminders: readonly Reminder[];
-  onChange: (reminder: Reminder) => void;
-  onAdd: () => void;
+  onChange: (reminder: Reminder) => Promise<void>;
+  onAdd: (reminder: Reminder) => Promise<void>;
   onRemove: (id: string) => void;
 }) {
   const avatars = useAvatarList();
+  const [newReminder, setNewReminder] = useState<Reminder | null>(null);
+
   return (
     <Section title="Reminders">
       {reminders.length === 0 ? <p className="muted">No reminders yet.</p> : null}
       {reminders.map((reminder) => (
-        <div className="reminder" key={reminder.id}>
-          {isCustom(reminder) ? (
-            // Only user-created reminders can be renamed or removed; the
-            // built-ins are part of what the companion is for.
-            <Row
-              label="Name"
-              control={
-                <input
-                  className="text-input"
-                  value={reminder.title}
-                  aria-label="Reminder name"
-                  onChange={(event) => onChange({ ...reminder, title: event.currentTarget.value })}
-                />
-              }
-            />
-          ) : null}
-          <Row
-            label={isCustom(reminder) ? 'Enabled' : reminder.title}
-            hint={isCustom(reminder) ? undefined : reminder.message}
-            control={
-              <Toggle
-                label={`Enable ${reminder.title}`}
-                checked={reminder.enabled}
-                onChange={(enabled) => onChange({ ...reminder, enabled })}
-              />
-            }
-          />
-          {isCustom(reminder) ? (
-            <Row
-              label="Message"
-              control={
-                <input
-                  className="text-input"
-                  value={reminder.message}
-                  aria-label="Reminder message"
-                  onChange={(event) =>
-                    onChange({ ...reminder, message: event.currentTarget.value })
-                  }
-                />
-              }
-            />
-          ) : null}
-          {reminder.enabled ? (
-            <Row
-              label="Every"
-              control={
-                <Slider
-                  label={`${reminder.title} interval`}
-                  min={5}
-                  max={180}
-                  step={5}
-                  value={reminder.intervalMinutes}
-                  format={(value) => `${value} min`}
-                  onChange={(intervalMinutes) =>
-                    onChange({
-                      ...reminder,
-                      intervalMinutes,
-                      // Restart the cycle from now, so a shortened interval
-                      // does not fire instantly from an old timestamp.
-                      nextTrigger: Date.now() + intervalMinutes * 60_000,
-                    })
-                  }
-                />
-              }
-            />
-          ) : null}
-          {reminder.enabled ? (
-            <Row
-              label="Avatar"
-              hint="Who delivers this one"
-              control={
-                <Choice
-                  label={`${reminder.title} avatar`}
-                  value={reminder.avatarId ?? ''}
-                  options={[
-                    { value: '', label: 'Whoever is on screen' },
-                    ...avatars.map((avatar) => ({ value: avatar.id, label: avatar.name })),
-                  ]}
-                  onChange={(avatarId) =>
-                    onChange({ ...reminder, avatarId: avatarId === '' ? null : avatarId })
-                  }
-                />
-              }
-            />
-          ) : null}
-          {isCustom(reminder) ? (
-            <Row
-              label="Remove"
-              control={
-                <Button tone="danger" onClick={() => onRemove(reminder.id)}>
-                  Delete
-                </Button>
-              }
-            />
-          ) : null}
-        </div>
+        <ReminderEditor
+          key={reminder.id}
+          reminder={reminder}
+          avatars={avatars}
+          onSave={onChange}
+          onDelete={isCustom(reminder) ? () => onRemove(reminder.id) : undefined}
+        />
       ))}
-      <Row
-        label="Add a reminder"
-        hint="Your own message, on your own schedule"
-        control={<Button onClick={onAdd}>Add</Button>}
-      />
+      {newReminder ? (
+        <ReminderEditor
+          reminder={newReminder}
+          avatars={avatars}
+          isNew
+          onSave={async (reminder) => {
+            await onAdd(reminder);
+            setNewReminder(null);
+          }}
+          onCancel={() => setNewReminder(null)}
+        />
+      ) : (
+        <div className="collection-action">
+          <div>
+            <strong>Add a reminder</strong>
+            <span>Your own message, on your own schedule</span>
+          </div>
+          <Button tone="primary" onClick={() => setNewReminder(createCustomReminder(Date.now()))}>
+            New reminder
+          </Button>
+        </div>
+      )}
     </Section>
+  );
+}
+
+function ReminderEditor({
+  reminder,
+  avatars,
+  onSave,
+  onDelete,
+  onCancel,
+  isNew = false,
+}: {
+  reminder: Reminder;
+  avatars: readonly AvatarSummary[];
+  onSave: (reminder: Reminder) => Promise<void>;
+  onDelete?: (() => void) | undefined;
+  onCancel?: (() => void) | undefined;
+  isNew?: boolean;
+}) {
+  const [draft, setDraft] = useState(reminder);
+  const [saving, setSaving] = useState(false);
+  const dirty = isNew || JSON.stringify(draft) !== JSON.stringify(reminder);
+
+  useEffect(() => setDraft(reminder), [reminder]);
+
+  const saveDraft = async () => {
+    setSaving(true);
+    try {
+      await onSave(draft);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="schedule-editor" data-dirty={dirty ? 'true' : 'false'}>
+      <div className="schedule-editor__heading">
+        <div>
+          <strong>{isNew ? 'New reminder' : draft.title}</strong>
+          <span>{draft.enabled ? `Every ${draft.intervalMinutes} minutes` : 'Paused'}</span>
+        </div>
+        <Toggle
+          label={`Enable ${draft.title}`}
+          checked={draft.enabled}
+          onChange={(enabled) => setDraft({ ...draft, enabled })}
+        />
+      </div>
+      {isCustom(draft) ? (
+        <Row
+          label="Name"
+          control={
+            <input
+              className="text-input"
+              value={draft.title}
+              aria-label="Reminder name"
+              onChange={(event) => setDraft({ ...draft, title: event.currentTarget.value })}
+            />
+          }
+        />
+      ) : null}
+      {isCustom(draft) ? (
+        <Row
+          label="Message"
+          control={
+            <input
+              className="text-input"
+              value={draft.message}
+              aria-label="Reminder message"
+              onChange={(event) => setDraft({ ...draft, message: event.currentTarget.value })}
+            />
+          }
+        />
+      ) : (
+        <p className="schedule-editor__message">“{draft.message}”</p>
+      )}
+      {draft.enabled ? (
+        <Row
+          label="Every"
+          control={
+            <Slider
+              label={`${draft.title} interval`}
+              min={5}
+              max={180}
+              step={5}
+              value={draft.intervalMinutes}
+              format={(value) => `${value} min`}
+              onChange={(intervalMinutes) =>
+                setDraft({
+                  ...draft,
+                  intervalMinutes,
+                  nextTrigger: Date.now() + intervalMinutes * 60_000,
+                })
+              }
+            />
+          }
+        />
+      ) : null}
+      {draft.enabled ? (
+        <Row
+          label="Avatar"
+          hint="Who delivers this one"
+          control={
+            <Choice
+              label={`${draft.title} avatar`}
+              value={draft.avatarId ?? ''}
+              options={[
+                { value: '', label: 'Whoever is on screen' },
+                ...avatars.map((avatar) => ({ value: avatar.id, label: avatar.name })),
+              ]}
+              onChange={(avatarId) =>
+                setDraft({ ...draft, avatarId: avatarId === '' ? null : avatarId })
+              }
+            />
+          }
+        />
+      ) : null}
+      <div className="schedule-editor__actions">
+        {onDelete ? (
+          <Button tone="danger" onClick={onDelete}>Delete</Button>
+        ) : <span />}
+        <div className="schedule-editor__commit">
+          {dirty && !isNew ? <Button onClick={() => setDraft(reminder)}>Cancel</Button> : null}
+          {onCancel ? <Button onClick={onCancel}>Cancel</Button> : null}
+          <Button tone="primary" disabled={!dirty || saving} onClick={() => void saveDraft()}>
+            {saving ? 'Saving…' : 'Save reminder'}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -609,11 +689,12 @@ function AlarmsPanel({
   onRemove,
 }: {
   alarms: readonly Alarm[];
-  onChange: (alarm: Alarm) => void;
-  onAdd: () => void;
+  onChange: (alarm: Alarm) => Promise<void>;
+  onAdd: (alarm: Alarm) => Promise<void>;
   onRemove: (id: string) => void;
 }) {
   const avatars = useAvatarList();
+  const [newAlarm, setNewAlarm] = useState<Alarm | null>(null);
 
   return (
     <Section title="Alarms">
@@ -625,60 +706,126 @@ function AlarmsPanel({
       ) : null}
 
       {alarms.map((alarm) => (
-        <div className="reminder" key={alarm.id}>
+        <AlarmEditor
+          key={alarm.id}
+          alarm={alarm}
+          avatars={avatars}
+          onSave={onChange}
+          onDelete={() => onRemove(alarm.id)}
+        />
+      ))}
+
+      {newAlarm ? (
+        <AlarmEditor
+          alarm={newAlarm}
+          avatars={avatars}
+          isNew
+          onSave={async (alarm) => {
+            await onAdd(alarm);
+            setNewAlarm(null);
+          }}
+          onCancel={() => setNewAlarm(null)}
+        />
+      ) : (
+        <div className="collection-action">
+          <div>
+            <strong>Add an alarm</strong>
+            <span>A time, and what to say when it comes round</span>
+          </div>
+          <Button tone="primary" onClick={() => setNewAlarm(createAlarm(Date.now()))}>
+            New alarm
+          </Button>
+        </div>
+      )}
+      <p className="section-note">
+        Alarms still go off while reminders are paused. An alarm is a moment you asked for.
+      </p>
+    </Section>
+  );
+}
+
+function AlarmEditor({
+  alarm,
+  avatars,
+  onSave,
+  onDelete,
+  onCancel,
+  isNew = false,
+}: {
+  alarm: Alarm;
+  avatars: readonly AvatarSummary[];
+  onSave: (alarm: Alarm) => Promise<void>;
+  onDelete?: (() => void) | undefined;
+  onCancel?: (() => void) | undefined;
+  isNew?: boolean;
+}) {
+  const [draft, setDraft] = useState(alarm);
+  const [saving, setSaving] = useState(false);
+  const dirty = isNew || JSON.stringify(draft) !== JSON.stringify(alarm);
+
+  useEffect(() => setDraft(alarm), [alarm]);
+
+  const saveDraft = async () => {
+    setSaving(true);
+    try {
+      await onSave(draft);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="schedule-editor" data-dirty={dirty ? 'true' : 'false'}>
+      <div className="schedule-editor__heading">
+        <div>
+          <strong>{isNew ? 'New alarm' : draft.label}</strong>
+          <span>{draft.enabled ? `${formatTime(draft.atMinutes)}${draft.repeatDaily ? ' · daily' : ' · once'}` : 'Off'}</span>
+        </div>
+        <Toggle
+          label={`Enable ${draft.label}`}
+          checked={draft.enabled}
+          onChange={(enabled) =>
+            setDraft(enabled ? scheduleAlarm({ ...draft, enabled }, Date.now()) : { ...draft, enabled })
+          }
+        />
+      </div>
           <Row
             label="What for"
             control={
               <input
                 className="text-input"
-                value={alarm.label}
+                value={draft.label}
                 aria-label="Alarm name"
                 placeholder="Standup"
-                onChange={(event) => onChange({ ...alarm, label: event.currentTarget.value })}
+                onChange={(event) => setDraft({ ...draft, label: event.currentTarget.value })}
               />
             }
           />
           <Row
             label="At"
-            hint={alarm.repeatDaily ? 'Every day' : 'The next time this comes round'}
+            hint={draft.repeatDaily ? 'Every day' : 'The next time this comes round'}
             control={
               <input
                 className="text-input"
                 type="time"
-                value={formatTime(alarm.atMinutes)}
+                value={formatTime(draft.atMinutes)}
                 aria-label="Alarm time"
                 onChange={(event) => {
                   const atMinutes = parseTime(event.currentTarget.value);
                   if (atMinutes === null) return;
-                  // Re-anchored from now, so a time moved earlier in the day
-                  // means tomorrow rather than firing the moment it is typed.
-                  onChange(scheduleAlarm({ ...alarm, atMinutes }, Date.now()));
+                  setDraft(scheduleAlarm({ ...draft, atMinutes }, Date.now()));
                 }}
               />
             }
           />
           <Row
-            label="Enabled"
-            control={
-              <Toggle
-                label={`Enable ${alarm.label}`}
-                checked={alarm.enabled}
-                onChange={(enabled) =>
-                  // Switching one back on re-anchors it: its stored moment is
-                  // in the past, and turning it on must not fire it at once.
-                  onChange(enabled ? scheduleAlarm({ ...alarm, enabled }, Date.now()) : { ...alarm, enabled })
-                }
-              />
-            }
-          />
-          <Row
             label="Repeat daily"
-            hint={alarm.repeatDaily ? undefined : 'Off: it goes off once, then switches itself off'}
+            hint={draft.repeatDaily ? undefined : 'Off: it goes off once, then switches itself off'}
             control={
               <Toggle
-                label={`Repeat ${alarm.label} daily`}
-                checked={alarm.repeatDaily}
-                onChange={(repeatDaily) => onChange({ ...alarm, repeatDaily })}
+                label={`Repeat ${draft.label} daily`}
+                checked={draft.repeatDaily}
+                onChange={(repeatDaily) => setDraft({ ...draft, repeatDaily })}
               />
             }
           />
@@ -687,14 +834,14 @@ function AlarmsPanel({
             hint="A first visit this long before the alarm itself"
             control={
               <Choice
-                label={`${alarm.label} warning`}
-                value={String(alarm.leadMinutes)}
+                label={`${draft.label} warning`}
+                value={String(draft.leadMinutes)}
                 options={LEAD_CHOICES.map((minutes) => ({
                   value: String(minutes),
                   label: minutes === 0 ? 'Not at all' : `${minutes} minutes before`,
                 }))}
                 onChange={(value) =>
-                  onChange({ ...alarm, leadMinutes: Number(value), leadDone: false })
+                  setDraft({ ...draft, leadMinutes: Number(value), leadDone: false })
                 }
               />
             }
@@ -705,10 +852,10 @@ function AlarmsPanel({
             control={
               <input
                 className="text-input"
-                value={alarm.message}
+                value={draft.message}
                 aria-label="Alarm message"
-                placeholder={`${alarm.label.trim() || 'Alarm'} — it's time.`}
-                onChange={(event) => onChange({ ...alarm, message: event.currentTarget.value })}
+                placeholder={`${draft.label.trim() || 'Alarm'} — it's time.`}
+                onChange={(event) => setDraft({ ...draft, message: event.currentTarget.value })}
               />
             }
           />
@@ -717,39 +864,29 @@ function AlarmsPanel({
             hint="Who delivers it"
             control={
               <Choice
-                label={`${alarm.label} avatar`}
-                value={alarm.avatarId ?? ''}
+                label={`${draft.label} avatar`}
+                value={draft.avatarId ?? ''}
                 options={[
                   { value: '', label: 'Whoever is on screen' },
                   ...avatars.map((avatar) => ({ value: avatar.id, label: avatar.name })),
                 ]}
                 onChange={(avatarId) =>
-                  onChange({ ...alarm, avatarId: avatarId === '' ? null : avatarId })
+                  setDraft({ ...draft, avatarId: avatarId === '' ? null : avatarId })
                 }
               />
             }
           />
-          <Row
-            label="Remove"
-            control={
-              <Button tone="danger" onClick={() => onRemove(alarm.id)}>
-                Delete
-              </Button>
-            }
-          />
+      <div className="schedule-editor__actions">
+        {onDelete ? <Button tone="danger" onClick={onDelete}>Delete</Button> : <span />}
+        <div className="schedule-editor__commit">
+          {dirty && !isNew ? <Button onClick={() => setDraft(alarm)}>Cancel</Button> : null}
+          {onCancel ? <Button onClick={onCancel}>Cancel</Button> : null}
+          <Button tone="primary" disabled={!dirty || saving} onClick={() => void saveDraft()}>
+            {saving ? 'Saving…' : 'Save alarm'}
+          </Button>
         </div>
-      ))}
-
-      <Row
-        label="Add an alarm"
-        hint="A time, and what to say when it comes round"
-        control={<Button onClick={onAdd}>Add</Button>}
-      />
-      <p className="muted">
-        Alarms still go off while reminders are paused: pausing stops the companion
-        interrupting you on its own, and an alarm is something you asked for.
-      </p>
-    </Section>
+      </div>
+    </div>
   );
 }
 
