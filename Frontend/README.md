@@ -16,7 +16,7 @@ Then open http://localhost:8000.
 
 ## What works
 
-- Separate Windows installer (`.exe`) and macOS installer (`.dmg`) download buttons.
+- Separate Windows (`.exe`), macOS (`.dmg`), and Linux (`.AppImage`) download buttons.
 - Looks up the **latest public GitHub release** to find real download asset URLs. Falls back to the official release page when unavailable.
 - The real Choto Rafi artwork and animated 8x4 sprite sheet from your public GitHub repository.
 - Interactive live playground: wave, run, drink water, nap, celebrate; drag the companion around.
@@ -64,7 +64,7 @@ After deploying:
 References: [Google's developer SEO guide](https://developers.google.com/search/docs/fundamentals/get-started-developers)
 and [sitemap guidance](https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap).
 
-The macOS and Windows installers are **unsigned**, and operating systems may warn on the first launch. Include detailed installation guidance in documentation if desired.
+The macOS and Windows installers are **unsigned**, and operating systems may warn on the first launch. Linux users can choose the portable AppImage or distribution packages from the release page.
 
 If the GitHub API is blocked, download buttons still go to the official latest
 release page and the download count stays hidden.

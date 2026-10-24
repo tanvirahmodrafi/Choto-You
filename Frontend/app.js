@@ -50,18 +50,49 @@ const screen=document.getElementById('demo-screen');let drag=null;
 demoChar.addEventListener('pointerdown',e=>{if(e.button!==0)return;const rect=demoChar.getBoundingClientRect();drag={pointer:e.pointerId,shiftX:e.clientX-rect.left,shiftY:e.clientY-rect.top};demoChar.setPointerCapture(e.pointerId);e.preventDefault()});
 demoChar.addEventListener('pointermove',e=>{if(!drag||e.pointerId!==drag.pointer)return;const bound=screen.getBoundingClientRect();const w=demoChar.offsetWidth,h=demoChar.offsetHeight;const x=Math.min(bound.width-w,Math.max(0,e.clientX-bound.left-drag.shiftX));const y=Math.min(bound.height-h,Math.max(0,e.clientY-bound.top-drag.shiftY));demoChar.style.left=`${x}px`;demoChar.style.top=`${y}px`;demoChar.style.bottom='auto'});
 demoChar.addEventListener('pointerup',()=>{drag=null;demoSpeech.textContent='weeeee!! ♡'});demoChar.addEventListener('pointercancel',()=>{drag=null});
-// GitHub API dynamically selects the actual installer of the latest published release.
-// If network/API access is unavailable, buttons safely lead to the official latest release page.
-async function resolveDownloads(){try{const response=await fetch('https://api.github.com/repos/tanvirahmodrafi/Choto-You/releases/latest',{headers:{Accept:'application/vnd.github+json'}});if(!response.ok)throw new Error('release unavailable');const data=await response.json();const assets=data.assets||[];const mac=assets.find(a=>/\.dmg$/i.test(a.name)&&/universal/i.test(a.name))||assets.find(a=>/\.dmg$/i.test(a.name));const win=assets.find(a=>/-setup\.exe$/i.test(a.name))||assets.find(a=>/\.exe$/i.test(a.name));for(const link of document.querySelectorAll('[data-download="mac"]'))if(mac)link.href=mac.browser_download_url;for(const link of document.querySelectorAll('[data-download="windows"]'))if(win)link.href=win.browser_download_url;const note=document.getElementById('release-note');if(data.tag_name)note.textContent=`Latest official release ${data.tag_name} · macOS & Windows · No account required`; }catch(err){/* GitHub releases page remains usable */}}
+// Match buttons to assets that actually exist on the latest published release.
+// The release-page href in the HTML remains a working fallback when the API is
+// unavailable or rate-limited; users are never sent to a guessed asset URL.
+async function resolveDownloads(){
+  const note=document.getElementById('release-note');
+  try {
+    const response=await fetch('https://api.github.com/repos/tanvirahmodrafi/Choto-You/releases/latest',{headers:{Accept:'application/vnd.github+json'}});
+    if(!response.ok)throw new Error('release unavailable');
+    const data=await response.json();
+    const assets=Array.isArray(data.assets)?data.assets:[];
+    const installers={
+      windows:assets.find(asset=>/-setup\.exe$/i.test(asset.name))||assets.find(asset=>/\.exe$/i.test(asset.name)),
+      mac:assets.find(asset=>/universal.*\.dmg$/i.test(asset.name))||assets.find(asset=>/\.dmg$/i.test(asset.name)),
+      linux:assets.find(asset=>/\.appimage$/i.test(asset.name)),
+    };
+
+    for(const [platform,asset] of Object.entries(installers)){
+      for(const link of document.querySelectorAll(`[data-download="${platform}"]`)){
+        if(!asset)continue;
+        link.href=asset.browser_download_url;
+        link.dataset.resolved='true';
+        link.setAttribute('aria-label',`${link.textContent.trim()} — ${asset.name}`);
+      }
+    }
+
+    const missing=Object.entries(installers).filter(([,asset])=>!asset).map(([platform])=>platform);
+    if(missing.length)throw new Error(`missing ${missing.join(', ')} installer`);
+    note.textContent=`Latest release ${data.tag_name} · Windows, macOS & Linux · Direct downloads ready`;
+    note.dataset.state='ready';
+  } catch(error) {
+    note.textContent='Installer lookup unavailable · Buttons open the official GitHub release page';
+    note.dataset.state='fallback';
+  }
+}
 resolveDownloads();
 
 // Total installer downloads, straight from GitHub's own release counters.
-// Counts .dmg/.exe/.msi only, so updater tarballs and signature files don't inflate it.
+// Counts desktop installers only, so updater archives and signatures do not inflate it.
 // Stays hidden if the API is unreachable or rate-limited — no number beats a wrong one.
 async function showDownloadCount(){const slot=document.getElementById('download-count');if(!slot)return;
   try{const response=await fetch('https://api.github.com/repos/tanvirahmodrafi/Choto-You/releases?per_page=100',{headers:{Accept:'application/vnd.github+json'}});
     if(!response.ok)throw new Error('releases unavailable');const releases=await response.json();if(!Array.isArray(releases))throw new Error('unexpected payload');
-    const total=releases.filter(r=>!r.draft).reduce((sum,release)=>sum+(release.assets||[]).filter(a=>/\.(dmg|exe|msi)$/i.test(a.name)).reduce((n,a)=>n+(a.download_count||0),0),0);
+    const total=releases.filter(r=>!r.draft).reduce((sum,release)=>sum+(release.assets||[]).filter(a=>/\.(dmg|exe|msi|appimage|deb|rpm)$/i.test(a.name)).reduce((n,a)=>n+(a.download_count||0),0),0);
     if(!total)return;
     slot.innerHTML=`♡ <b>${total.toLocaleString()}</b> ${total===1?'download':'downloads'} and counting`;slot.hidden=false;
   }catch(err){/* the line simply stays hidden */}}
