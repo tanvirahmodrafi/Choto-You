@@ -99,17 +99,17 @@ export const SHEET_PLAN: readonly SheetRow[] = [
   {
     kind: 'sequence',
     slot: 'idle',
-    label: 'Standing',
+    label: 'Idle / breathing',
     fps: 6,
     cells: [
-      'standing relaxed, arms at the sides, weight even on both feet, eyes open, calm friendly expression. This cell sets the pose the other seven return to',
-      'the same pose, beginning to breathe in, shoulders rising slightly',
-      'mid-breath, the chest lifted a little',
-      'top of the breath, a touch taller, same calm expression',
-      'breathing out, shoulders beginning to lower',
-      'almost back to the relaxed pose',
-      'the relaxed pose with the eyelids halfway down, starting to blink',
-      'the relaxed pose with both eyes closed, finishing the blink',
+      'Relaxed standing, arms at sides, both feet planted, eyes open',
+      'Beginning to inhale; shoulders rise slightly',
+      'Chest gently expands',
+      'Full inhale; shoulders at highest position',
+      'Beginning to exhale; shoulders lower',
+      'Returning to relaxed standing',
+      'Relaxed stance, eyelids half-closed',
+      'Gentle blink, eyes closed; seamlessly returns to frame 1',
     ],
   },
   {
@@ -118,74 +118,74 @@ export const SHEET_PLAN: readonly SheetRow[] = [
     label: 'Run cycle (jog / sprint)',
     fps: 8,
     cells: [
-      'CONTACT, RIGHT leg leading: the right foot strikes the ground in front, knee slightly bent; the left leg stretched far out behind, toe trailing. Torso leaning forward, left arm driving forward and right arm back, elbows bent to about a right angle, hands loosely closed',
-      'DOWN, right leg leading — the lowest point: the right knee deeply bent under the whole weight, body compressed over it; the left leg swung through underneath, knee bent, heel tucked up near the backside. Arms beginning to reverse',
-      'PASSING, right leg leading: the right leg straightening to push off, heel lifting, while the left knee drives forward past it, high in front. Body rising, arms level at the sides',
-      'UP, right leg leading — AIRBORNE, both feet clear of the ground, body at its highest: legs scissored wide apart, left knee high in front, right leg extended fully back. Right arm forward, left arm back',
-      'CONTACT, LEFT leg leading: cell 1 with the arms and legs swapped',
-      'DOWN, left leg leading: cell 2 with the arms and legs swapped',
-      'PASSING, left leg leading: cell 3 with the arms and legs swapped',
-      'UP, left leg leading: cell 4 with the arms and legs swapped, flowing straight back into cell 1 to close the loop',
+      'RIGHT CONTACT: Right foot lands ahead of the body, left leg extended backward. Left arm forward, right arm backward',
+      'RIGHT COMPRESSION: Right knee bends under body weight. Left leg bends and begins recovering forward. Body lowers slightly',
+      'RIGHT PUSH-OFF: Right leg extends backward, right heel lifts. Left knee swings forward and upward. Body rises',
+      'AIRBORNE: Both feet completely above the baseline. LEFT knee leading forward, RIGHT leg trailing backward. Right arm forward, left arm backward',
+      'LEFT CONTACT: Left foot lands ahead of the body, right leg extended backward. Right arm forward, left arm backward',
+      'LEFT COMPRESSION: Left knee bends under body weight. Right leg bends and begins recovering forward. Body lowers slightly',
+      'LEFT PUSH-OFF: Left leg extends backward, left heel lifts. Right knee swings forward and upward. Body rises',
+      'AIRBORNE: Both feet completely above the baseline. RIGHT knee leading forward, LEFT leg trailing backward. Left arm forward, right arm backward',
     ],
   },
   {
     kind: 'sequence',
     slot: 'wave',
-    label: 'Edge-holding peek / friendly greeting',
+    label: 'Peeking / waving',
     fps: 6,
     cells: [
-      'peeking: the near hand raised beside the cheek, elbow bent, fingers gently curled as if gripping an imaginary vertical edge, eyes glancing right, curious expression',
-      'still holding that imaginary edge, head tipped slightly to the right, eyebrows raised',
-      'more confident: head upright, hand still beside the cheek, fingers starting to relax, a small friendly smile',
-      'releasing the edge into a greeting: the hand opening beside the head, palm visible, warm smile',
-      'waving, open palm tilted outward, elbow bent',
-      'waving back the other way, open palm tilted inward',
-      'finishing the wave: the hand returning beside the cheek, fingers beginning to curl again',
-      'the hand curled around the imaginary edge once more, matching cell 1 so the loop closes',
+      'Curious peek, one hand curled beside cheek as if holding an invisible screen edge',
+      'Still holding the imaginary edge; head tilted slightly',
+      'Head upright, fingers relaxing, small smile',
+      'Releasing the imaginary edge, palm opening beside head',
+      'Friendly wave, palm tilted outward',
+      'Hand waves back inward',
+      'Hand returns toward cheek; fingers curling',
+      'Returns to original peeking pose, matching frame 1',
     ],
   },
   {
     kind: 'poses',
-    label: 'Reactions, and the pick-up sequence',
+    label: 'Special reactions',
     cells: [
       {
         slot: 'jump',
         description:
-          'hopping on the spot with excitement: both feet off the ground, knees bent up underneath, both arms lifted, big grin',
+          'Excited hop: Both feet airborne, knees bent, arms raised, cheerful grin',
       },
       {
         slot: 'fall',
         description:
-          'JUST RELEASED, dropping: the body upright but tilted slightly back, both arms up and out for balance, legs loose and trailing, hair and clothing pushed upwards by the air, eyes wide',
+          'Released / falling: Body falling through air, arms spread for balance, startled face, feet dangling',
       },
       {
         slot: 'land',
         description:
-          'LANDING, absorbing the impact: a deep crouch with both feet planted, knees bent out to the sides, the body compressed down over them, one hand reaching to the floor for balance and the other out to the side, bracing expression',
+          'Landing: Deep crouch, both feet planted, one hand near floor, bracing expression',
       },
       {
         slot: 'happy',
-        description: 'delighted: both arms raised, big smile, eyes crinkled',
+        description: 'Delighted: Both arms raised, big smile, happy eyes',
       },
       {
         slot: 'surprised',
         description:
-          'startled: eyes wide open, eyebrows up, both hands raised near the shoulders, mouth a small open circle',
+          'Surprised: Wide eyes, raised eyebrows, hands near shoulders, mouth slightly open',
       },
       {
         slot: 'drink',
         description:
-          'drinking: a plain glass of water held up to the mouth in one hand, head tipped back slightly, content expression',
+          'Drinking: Holding a plain glass of water to mouth, head slightly tilted backward',
       },
       {
         slot: 'dragged',
         description:
-          'PICKED UP and held in the air: the body hanging as if lifted from under the arms, feet dangling clear of the ground, arms loose, head turned up, startled but trusting expression. Draw nothing doing the lifting — no hand, string or hook',
+          'Picked up: Hanging in midair as though lifted from under the arms, feet dangling, arms relaxed, startled expression. Do not draw the lifting hand',
       },
       {
         slot: 'sleep',
         description:
-          'asleep on their feet: eyes closed as two curved lines, head tipped to one side, arms limp, peaceful expression',
+          'Sleeping: Standing peacefully, closed eyes, tilted head, limp arms',
       },
     ],
   },

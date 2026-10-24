@@ -83,6 +83,9 @@ STYLE:
 - Facing RIGHT in every cell — a three-quarter view towards the right, except the run row, which is a near-side view so both legs read clearly.
 - Both arms and both legs visible in every cell, with the limbs on the far side of the body shaded slightly darker so the two sides can be told apart.
 
+CONTENT SAFETY:
+- Never generate any image that conflicts with Islamic values. Nudity and sexual imagery are not allowed.
+
 OUTPUT FORMAT:
 - A single PNG, exactly ${SHEET_WIDTH}x${SHEET_HEIGHT} pixels. Do not return a smaller preview.
 - An exact ${SHEET_COLUMNS}x${SHEET_ROWS} grid: ${SHEET_COLUMNS} columns, ${SHEET_ROWS} rows, ${SHEET_COLUMNS * SHEET_ROWS} cells of ${cellWidth}x${cellHeight} pixels each.
@@ -108,6 +111,9 @@ ROW 2 IS A RUN CYCLE — the part most often got wrong:
 - Cells 5 to 8 are cells 1 to 4 with the arms and legs swapped — NOT mirrored. The character still faces right. Over the loop each leg leads exactly once, and the same leg never leads in two neighbouring cells. If cells 1 and 5 look alike, the row is wrong.
 - Keep the legs clearly separate in every cell: a visible gap, or one swinging past the other with the knee bent. Never hide the far leg behind the near one.
 - The character runs on the spot. Do not move it across the row.
+- The anatomically same leg must remain identifiable across all eight frames. Shade the far-side leg slightly darker, and never conceal one leg behind the other or merge the legs into a single shape.
+- Do not mirror the whole character to create the opposite stride. Exchange limb positions while preserving the character's right-facing direction and identity.
+- Frame 8 must transition smoothly into frame 1 without foot snapping or a sudden pose change.
 
 WHAT THE ROWS ARE FOR — this is how the app uses them, so draw for it:
 - Row 1 is the calm standing loop, used while the character is idle and while it speaks.
@@ -123,6 +129,13 @@ WHAT THE ROWS ARE FOR — this is how the app uses them, so draw for it:
 THE CELLS, left to right, top to bottom:
 
 ${rows}${options.extras?.trim() ? `\n\nALSO: ${options.extras.trim()}` : ''}
+
+FINAL QUALITY CHECK BEFORE RETURNING THE IMAGE:
+- Verify there are exactly 32 distinct frames in the correct order, with no duplicated running frames or repeated same-leg poses.
+- Visually trace the complete running sequence: RIGHT contact → RIGHT compression → RIGHT push-off → airborne → LEFT contact → LEFT compression → LEFT push-off → airborne. Correct any frame that makes the character appear to run on only one leg.
+- Confirm consistent facial identity, outfit, colours, lighting, proportions, scale and horizontal registration across every frame.
+- Confirm every body part is anatomically connected, with no missing or extra limbs, and no clipped feet, hands or hair.
+- Confirm the background is truly transparent and the output is one ${SHEET_WIDTH}x${SHEET_HEIGHT} PNG, not ${SHEET_COLUMNS * SHEET_ROWS} separate images.
 
 Please return the finished PNG as a downloadable file.`;
 }
